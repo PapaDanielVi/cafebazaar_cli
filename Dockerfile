@@ -26,7 +26,7 @@ RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
       -X github.com/PapaDanielVi/cafebazaar_cli/internal/cli.BuildDate=${BUILD_DATE}" \
     -o /out/bazaar ./cmd/bazaar
 
-FROM alpine:3.21
+FROM alpine:3.24
 
 LABEL org.opencontainers.image.title="bazaar" \
       org.opencontainers.image.description="CafeBazaar CLI for Android app publishing, Pishkhan releases, AAB/APK uploads, and user reviews" \
