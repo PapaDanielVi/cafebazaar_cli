@@ -1,0 +1,7 @@
+bin/
+bazaar
+*.out
+coverage.txt
+.DS_Store
+.bazaar.yaml
+docs/
