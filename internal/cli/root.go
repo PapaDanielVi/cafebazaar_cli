@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/PapaDanielVi/cafebazaar_cli/internal/android"
@@ -367,4 +368,46 @@ func readUTF8TextFlagOrFile(ctx context.Context, inline, filePath, envFallback s
 		return strings.TrimSpace(inline), nil
 	}
 	return strings.TrimSpace(envFallback), nil
+}
+
+func shortenDisplayPath(ctx context.Context, fullPath string) string {
+	_ = ctx
+	trimmed := strings.TrimSpace(fullPath)
+	if trimmed == "" {
+		return ""
+	}
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return trimmed
+	}
+	cleanHome := filepath.Clean(home)
+	cleanPath := filepath.Clean(trimmed)
+	if cleanPath == cleanHome {
+		return "~"
+	}
+	prefix := cleanHome + string(filepath.Separator)
+	if strings.HasPrefix(cleanPath, prefix) {
+		return "~" + string(filepath.Separator) + strings.TrimPrefix(cleanPath, prefix)
+	}
+	return cleanPath
+}
+
+func relativeDisplayPath(ctx context.Context, rootDir, targetPath string) string {
+	if strings.TrimSpace(rootDir) != "" && strings.TrimSpace(targetPath) != "" {
+		if rel, err := filepath.Rel(rootDir, targetPath); err == nil && !strings.HasPrefix(rel, "..") {
+			return rel
+		}
+	}
+	return shortenDisplayPath(ctx, targetPath)
+}
+
+func joinShortPaths(ctx context.Context, paths []string) string {
+	if len(paths) == 0 {
+		return ""
+	}
+	shortened := make([]string, 0, len(paths))
+	for _, p := range paths {
+		shortened = append(shortened, shortenDisplayPath(ctx, p))
+	}
+	return strings.Join(shortened, ", ")
 }

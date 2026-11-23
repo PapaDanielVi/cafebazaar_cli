@@ -17,6 +17,22 @@
 
 ---
 
+## Demos
+
+### Live Status, Auth Overview & Project Config
+
+![bazaar status, auth overview, and project config](assets/demos/status-and-config.gif)
+
+### Android Gradle Detection, Variants & Safe Dry-Run Version Bump
+
+![bazaar Android Gradle inspection and dry-run bump](assets/demos/android-gradle.gif)
+
+### Dynamic Autocomplete & Headless CI/CD JSON Output
+
+![bazaar CLI help, dynamic autocomplete, and raw UTF-8 JSON output](assets/demos/ci-and-cli-tools.gif)
+
+---
+
 ## Features
 
 - **Complete CafeBazaar API coverage**: all 10 Pishkhan Release API endpoints (create, delete, APK/AAB/bin upload, bundle status polling, commit, published/committed/uncommitted queries), both Comments API endpoints (filtered review listing with cursor pagination and developer replies), and the Nasher Publisher API (`POST /v1/apps/` with `issue_api_agent`).
@@ -43,7 +59,7 @@ curl -fsSL https://raw.githubusercontent.com/PapaDanielVi/cafebazaar_cli/master/
 Install a specific version or custom directory:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/PapaDanielVi/cafebazaar_cli/master/scripts/install.sh | bash -s -- -v v0.1.0-beta.4 -d "$HOME/.local/bin"
+curl -fsSL https://raw.githubusercontent.com/PapaDanielVi/cafebazaar_cli/master/scripts/install.sh | bash -s -- -v v0.1.0-beta.5 -d "$HOME/.local/bin"
 ```
 
 ### Windows (PowerShell)
@@ -55,7 +71,7 @@ irm https://raw.githubusercontent.com/PapaDanielVi/cafebazaar_cli/master/scripts
 To pin a version in PowerShell:
 
 ```powershell
-$env:BAZAAR_VERSION = "v0.1.0-beta.4"
+$env:BAZAAR_VERSION = "v0.1.0-beta.5"
 irm https://raw.githubusercontent.com/PapaDanielVi/cafebazaar_cli/master/scripts/install.ps1 | iex
 ```
 
@@ -68,7 +84,7 @@ Multi-arch images (`linux/amd64`, `linux/arm64`) are published to GHCR for CI/CD
 docker pull ghcr.io/papadanielvi/cafebazaar_cli:beta
 
 # Pinned version
-docker pull ghcr.io/papadanielvi/cafebazaar_cli:v0.1.0-beta.4
+docker pull ghcr.io/papadanielvi/cafebazaar_cli:v0.1.0-beta.5
 
 # Run against your local project directory
 docker run --rm \

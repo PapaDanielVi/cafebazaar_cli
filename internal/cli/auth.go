@@ -473,7 +473,7 @@ func runAuthOverview(ctx context.Context, rt *AppRuntime) error {
 		{Key: "Nasher Developer Token", Value: pubStatus},
 		{Key: "Current Folder App", Value: activeStatus},
 		{Key: "Registered Apps", Value: fmt.Sprintf("%d", len(apps))},
-		{Key: "Config File", Value: rt.ConfigPath},
+		{Key: "Config File", Value: shortenDisplayPath(ctx, rt.ConfigPath)},
 	}); err != nil {
 		return err
 	}
@@ -485,7 +485,7 @@ func runAuthOverview(ctx context.Context, rt *AppRuntime) error {
 			if a.PackageName == rt.Global.DefaultApp {
 				marker = "*"
 			}
-			rows = append(rows, []string{marker, a.PackageName, a.Alias, a.TokenSource, a.Backend, strings.Join(a.Paths, ", ")})
+			rows = append(rows, []string{marker, a.PackageName, a.Alias, a.TokenSource, a.Backend, joinShortPaths(ctx, a.Paths)})
 		}
 		return rt.Printer.PrintTable(ctx, []string{"Def", "Package Name", "Alias", "Origin", "Storage", "Bound Folders"}, rows)
 	}

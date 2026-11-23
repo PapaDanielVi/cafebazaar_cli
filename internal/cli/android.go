@@ -57,9 +57,9 @@ func runAndroidInfo(ctx context.Context, rt *AppRuntime) error {
 
 	mod, _ := rt.Android.PrimaryModule(ctx, "")
 	items := []output.KeyValue{
-		{Key: "Project Root", Value: rt.Android.RootDir},
+		{Key: "Project Root", Value: shortenDisplayPath(ctx, rt.Android.RootDir)},
 		{Key: "Primary Module", Value: mod.Name},
-		{Key: "Build File", Value: mod.BuildFile},
+		{Key: "Build File", Value: relativeDisplayPath(ctx, rt.Android.RootDir, mod.BuildFile)},
 		{Key: "Base App ID", Value: mod.ApplicationID},
 		{Key: "Version", Value: fmt.Sprintf("%s (code %d)", mod.VersionName, mod.VersionCode)},
 		{Key: "Gradle Wrapper", Value: fmt.Sprintf("%v", rt.Android.HasWrapper)},
@@ -255,7 +255,7 @@ func runAndroidBump(
 		title = "Android Version Bump (Dry Run)"
 	}
 	items := []output.KeyValue{
-		{Key: "Build File", Value: plan.BuildFile},
+		{Key: "Build File", Value: relativeDisplayPath(ctx, rt.Android.RootDir, plan.BuildFile)},
 		{Key: "versionCode", Value: fmt.Sprintf("%d -> %d", plan.OldVersionCode, plan.NewVersionCode)},
 		{Key: "versionName", Value: fmt.Sprintf("%s -> %s", plan.OldVersionName, plan.NewVersionName)},
 	}

@@ -8,7 +8,10 @@ LDFLAGS := -X github.com/PapaDanielVi/cafebazaar_cli/internal/cli.Version=$(VERS
 	-X github.com/PapaDanielVi/cafebazaar_cli/internal/cli.Commit=$(COMMIT) \
 	-X github.com/PapaDanielVi/cafebazaar_cli/internal/cli.BuildDate=$(BUILD_DATE)
 
-.PHONY: build test vet install clean release-dist
+.PHONY: build test vet install clean release-dist demos
+
+DEMO_DIR ?= .
+DEMO_MASK_PATH ?= ~/projects/cafebazaar-sample-app
 
 build:
 	@mkdir -p $(BIN_DIR)
@@ -40,6 +43,65 @@ release-dist:
 		rm -rf "$$stage"; \
 	done
 	@(cd dist && shasum -a 256 $(BINARY)_* > checksums.txt)
+
+demos:
+	@command -v vhs >/dev/null 2>&1 || { echo "vhs is required (https://github.com/charmbracelet/vhs)"; exit 1; }
+	@REPO_DIR="$$(pwd)"; \
+	TARGET_DIR="$$(cd "$(DEMO_DIR)" && pwd)"; \
+	TMP_DIR="$$(mktemp -d)"; \
+	trap 'rm -rf "$$TMP_DIR"' EXIT; \
+	mkdir -p "$$TMP_DIR/bin"; \
+	REAL_BAZAAR="$$(command -v bazaar || echo "$$REPO_DIR/$(BIN_DIR)/$(BINARY)")"; \
+	printf '%s\n' \
+		'#!/usr/bin/env python3' \
+		'import codecs, fcntl, os, pty, select, subprocess, sys, termios' \
+		'real_bin = os.environ["BAZAAR_REAL_BIN"]' \
+		'target = os.environ["BAZAAR_DEMO_TARGET"]' \
+		'home = os.path.expanduser("~")' \
+		'short_target = "~" + target[len(home):] if target.startswith(home + "/") else target' \
+		'mask = os.environ["BAZAAR_DEMO_MASK"]' \
+		'master, slave = pty.openpty()' \
+		'try:' \
+		'    ws = fcntl.ioctl(sys.stdout.fileno(), termios.TIOCGWINSZ, b"\x00" * 8)' \
+		'    fcntl.ioctl(slave, termios.TIOCSWINSZ, ws)' \
+		'except Exception:' \
+		'    pass' \
+		'proc = subprocess.Popen([real_bin] + sys.argv[1:], stdin=slave, stdout=slave, stderr=slave, close_fds=True)' \
+		'os.close(slave)' \
+		'decoder = codecs.getincrementaldecoder("utf-8")("replace")' \
+		'buf = ""' \
+		'while True:' \
+		'    r, _, _ = select.select([master], [], [], 0.1)' \
+		'    if r:' \
+		'        try:' \
+		'            data = os.read(master, 4096)' \
+		'        except OSError:' \
+		'            break' \
+		'        if not data:' \
+		'            break' \
+		'        buf += decoder.decode(data, final=False)' \
+		'        while "\n" in buf:' \
+		'            line, buf = buf.split("\n", 1)' \
+		'            line = line.replace(short_target, mask).replace(target, mask).replace(home, "~")' \
+		'            sys.stdout.buffer.write((line + "\n").encode("utf-8"))' \
+		'            sys.stdout.buffer.flush()' \
+		'    elif proc.poll() is not None:' \
+		'        break' \
+		'buf += decoder.decode(b"", final=True)' \
+		'if buf:' \
+		'    buf = buf.replace(short_target, mask).replace(target, mask).replace(home, "~")' \
+		'    sys.stdout.buffer.write(buf.encode("utf-8"))' \
+		'    sys.stdout.buffer.flush()' \
+		'os.close(master)' \
+		'sys.exit(proc.wait())' > "$$TMP_DIR/bin/bazaar"; \
+	chmod +x "$$TMP_DIR/bin/bazaar"; \
+	for tape in android-gradle status-and-config ci-and-cli-tools; do \
+		sed "s|Output \"assets/demos/|Output \"$$REPO_DIR/assets/demos/|g" "$$REPO_DIR/assets/demos/$${tape}.tape" > "$$TMP_DIR/$${tape}.tape"; \
+		if [ "$$tape" != "ci-and-cli-tools" ]; then \
+			python3 -c 'import pathlib,sys; p=pathlib.Path(sys.argv[1]); s=p.read_text(); inj=f"Type '\''export PATH=\"{sys.argv[2]}/bin:$$PATH\"'\''\nEnter\n"; p.write_text(s.replace("Type \"clear\"\nEnter\nSleep 400ms\nShow", inj+"Type \"clear\"\nEnter\nSleep 400ms\nShow", 1))' "$$TMP_DIR/$${tape}.tape" "$$TMP_DIR"; \
+		fi; \
+		(cd "$$TARGET_DIR" && BAZAAR_REAL_BIN="$$REAL_BAZAAR" BAZAAR_DEMO_TARGET="$$TARGET_DIR" BAZAAR_DEMO_MASK="$(DEMO_MASK_PATH)" vhs "$$TMP_DIR/$${tape}.tape"); \
+	done
 
 clean:
 	rm -rf $(BIN_DIR) dist

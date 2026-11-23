@@ -135,8 +135,7 @@ func (p *Printer) PrintCard(ctx context.Context, title string, items []KeyValue)
 			b.WriteByte('\n')
 		}
 	}
-	cardStyle := p.Theme.Card.MaxWidth(cardWidth)
-	if _, err := fmt.Fprintln(p.Out, cardStyle.Render(b.String())); err != nil {
+	if _, err := fmt.Fprintln(p.Out, p.Theme.Card.Render(b.String())); err != nil {
 		return fmt.Errorf("write styled card: %w", err)
 	}
 	return nil

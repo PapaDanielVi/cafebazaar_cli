@@ -81,7 +81,7 @@ func (p *Printer) renderDangerSummary(ctx context.Context, req ConfirmRequest) e
 
 	rendered := strings.TrimRight(b.String(), "\n")
 	if p.Theme.Enabled {
-		rendered = p.Theme.DangerCard.MaxWidth(p.cardWidth(ctx)).Render(rendered)
+		rendered = p.Theme.DangerCard.Render(rendered)
 	}
 	if _, err := fmt.Fprintln(p.Err, rendered); err != nil {
 		return fmt.Errorf("write danger confirmation card: %w", err)
