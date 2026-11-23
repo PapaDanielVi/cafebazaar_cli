@@ -73,19 +73,25 @@ jobs:
           ls -lh dist/
 
       - name: Publish GitHub Release
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           TAG="${GITHUB_REF_NAME}"
-          extra_flags=()
-          if [[ "$TAG" == *"-"* ]]; then
-            extra_flags+=(--prerelease)
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release ${TAG} already exists; uploading assets with --clobber."
+            gh release upload "$TAG" dist/* --clobber
+          else
+            extra_flags=()
+            if [[ "$TAG" == *"-"* ]]; then
+              extra_flags+=(--prerelease)
+            fi
+            gh release create "$TAG" dist/* \
+              --title "bazaar ${TAG}" \
+              --generate-notes \
+              "${extra_flags[@]}"
           fi
-          gh release create "$TAG" dist/* \
-            --title "bazaar ${TAG}" \
-            --generate-notes \
-            "${extra_flags[@]}"
 
       - name: Update Homebrew Tap Cask
         if: ${{ !contains(github.ref_name, '-') }}
