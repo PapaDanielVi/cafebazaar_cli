@@ -44,6 +44,10 @@ const (
 	EnvNoKeyring = "BAZAAR_NO_KEYRING"
 	// EnvConfig overrides the global config file path.
 	EnvConfig = "BAZAAR_CONFIG"
+	// EnvProxy configures an HTTP, HTTPS, or SOCKS5 proxy exclusively for bazaar.
+	EnvProxy = "BAZAAR_PROXY"
+	// EnvCafeBazaarProxy is an alias for BAZAAR_PROXY for CI pipelines using CAFEBAZAAR_* naming.
+	EnvCafeBazaarProxy = "CAFEBAZAAR_PROXY"
 	// EnvNoColor disables ANSI color output.
 	EnvNoColor = "NO_COLOR"
 	// EnvXDGConfigHome overrides the base XDG configuration directory.
@@ -70,6 +74,7 @@ type EnvSettings struct {
 	RTL            string
 	NoKeyring      bool
 	ConfigPath     string
+	Proxy          string
 	NoColor        bool
 }
 
@@ -105,6 +110,7 @@ func ReadEnv(ctx context.Context, lookup func(string) (string, bool)) EnvSetting
 		RTL:            strings.ToLower(get(EnvRTL)),
 		NoKeyring:      getBool(EnvNoKeyring),
 		ConfigPath:     get(EnvConfig),
+		Proxy:          firstNonEmpty(ctx, get(EnvProxy), get(EnvCafeBazaarProxy)),
 		NoColor:        isSetNonEmpty(ctx, lookup, EnvNoColor),
 	}
 
@@ -119,6 +125,16 @@ func ReadEnv(ctx context.Context, lookup func(string) (string, bool)) EnvSetting
 	}
 
 	return settings
+}
+
+func firstNonEmpty(ctx context.Context, values ...string) string {
+	_ = ctx
+	for _, v := range values {
+		if trimmed := strings.TrimSpace(v); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
 }
 
 func isSetNonEmpty(ctx context.Context, lookup func(string) (string, bool), key string) bool {

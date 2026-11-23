@@ -32,6 +32,7 @@ const (
 	flagNoColor    = "no-color"
 	flagVerbose    = "verbose"
 	flagConfigPath = "config"
+	flagProxy      = "proxy"
 )
 
 var (
@@ -67,6 +68,7 @@ type GlobalFlags struct {
 	NoColor    bool
 	Verbose    bool
 	ConfigPath string
+	Proxy      string
 }
 
 // AppRuntime aggregates resolved configuration, Android detection, token store, and UI printer.
@@ -124,6 +126,7 @@ func NewRootCmd(ctx context.Context, deps Dependencies) *cobra.Command {
 	pf.BoolVar(&rt.Flags.NoColor, flagNoColor, false, "Disable colored output")
 	pf.BoolVar(&rt.Flags.Verbose, flagVerbose, false, "Enable verbose diagnostics")
 	pf.StringVar(&rt.Flags.ConfigPath, flagConfigPath, "", "Path to global bazaar config.yaml")
+	pf.StringVar(&rt.Flags.Proxy, flagProxy, "", "Proxy URL for CafeBazaar API calls (http://, https://, socks5://, socks5h://, or direct)")
 
 	registerGlobalFlagCompletions(ctx, cmd, rt)
 
@@ -259,17 +262,48 @@ func (r *AppRuntime) resolveActiveApp(ctx context.Context, variant string) (conf
 	return resolved, nil
 }
 
+func (r *AppRuntime) resolveProxyURL(ctx context.Context) string {
+	_ = ctx
+	if v := strings.TrimSpace(r.Flags.Proxy); v != "" {
+		return v
+	}
+	if v := strings.TrimSpace(r.Env.Proxy); v != "" {
+		return v
+	}
+	if r.Project != nil && strings.TrimSpace(r.Project.Proxy) != "" {
+		return strings.TrimSpace(r.Project.Proxy)
+	}
+	if r.Global != nil && strings.TrimSpace(r.Global.Proxy) != "" {
+		return strings.TrimSpace(r.Global.Proxy)
+	}
+	return ""
+}
+
 func (r *AppRuntime) newPishkhanClient(ctx context.Context, token string) (*pishkhan.Client, error) {
+	proxyURL := r.resolveProxyURL(ctx)
+	if r.Flags.Verbose && proxyURL != "" && r.Printer != nil {
+		if err := r.Printer.PrintInfo(ctx, fmt.Sprintf("Using proxy: %s", httpclient.MaskProxyURL(ctx, proxyURL))); err != nil {
+			return nil, err
+		}
+	}
 	return pishkhan.New(ctx, pishkhan.Config{
-		BaseURL: r.Deps.PishkhanBaseURL,
-		Token:   token,
+		BaseURL:  r.Deps.PishkhanBaseURL,
+		Token:    token,
+		ProxyURL: proxyURL,
 	})
 }
 
 func (r *AppRuntime) newCommentsClient(ctx context.Context, token string) (*comments.Client, error) {
+	proxyURL := r.resolveProxyURL(ctx)
+	if r.Flags.Verbose && proxyURL != "" && r.Printer != nil {
+		if err := r.Printer.PrintInfo(ctx, fmt.Sprintf("Using proxy: %s", httpclient.MaskProxyURL(ctx, proxyURL))); err != nil {
+			return nil, err
+		}
+	}
 	return comments.New(ctx, comments.Config{
-		BaseURL: r.Deps.CommentsBaseURL,
-		Token:   token,
+		BaseURL:  r.Deps.CommentsBaseURL,
+		Token:    token,
+		ProxyURL: proxyURL,
 	})
 }
 
@@ -285,10 +319,17 @@ func (r *AppRuntime) newPublisherClient(ctx context.Context, token, headerOverri
 	if header == "" && r.Global != nil && r.Global.Publisher != nil {
 		header = r.Global.Publisher.AuthHeader
 	}
+	proxyURL := r.resolveProxyURL(ctx)
+	if r.Flags.Verbose && proxyURL != "" && r.Printer != nil {
+		if err := r.Printer.PrintInfo(ctx, fmt.Sprintf("Using proxy: %s", httpclient.MaskProxyURL(ctx, proxyURL))); err != nil {
+			return nil, err
+		}
+	}
 	return publisher.New(ctx, publisher.Config{
 		BaseURL:        baseURL,
 		Token:          token,
 		AuthHeaderName: header,
+		ProxyURL:       proxyURL,
 	})
 }
 

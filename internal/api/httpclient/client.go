@@ -34,6 +34,7 @@ type Config struct {
 	Token          string
 	AuthHeaderName string
 	UserAgent      string
+	ProxyURL       string
 	Timeout        time.Duration
 	UploadTimeout  time.Duration
 	MaxRetries     int
@@ -98,7 +99,11 @@ func New(ctx context.Context, cfg Config) (*Client, error) {
 
 	httpClient := cfg.HTTPClient
 	if httpClient == nil {
-		httpClient = &http.Client{}
+		transport, err := buildTransport(ctx, cfg.ProxyURL)
+		if err != nil {
+			return nil, err
+		}
+		httpClient = &http.Client{Transport: transport}
 	}
 
 	return &Client{
@@ -417,4 +422,79 @@ func sleepWithContext(ctx context.Context, d time.Duration) error {
 	case <-timer.C:
 		return nil
 	}
+}
+
+// ParseProxyURL validates and normalizes a proxy URL (supporting http, https, socks5, socks5h, direct, and none).
+func ParseProxyURL(ctx context.Context, raw string) (*url.URL, bool, error) {
+	_ = ctx
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return nil, false, nil
+	}
+	lower := strings.ToLower(trimmed)
+	if lower == ProxyDirect || lower == ProxyNone {
+		return nil, true, nil
+	}
+
+	parsed, err := url.Parse(trimmed)
+	if err != nil {
+		return nil, false, fmt.Errorf("%w %q: %w", ErrInvalidProxyURL, trimmed, err)
+	}
+	scheme := strings.ToLower(parsed.Scheme)
+	if scheme == ProxySchemeSOCKS5H {
+		parsed.Scheme = ProxySchemeSOCKS5
+		scheme = ProxySchemeSOCKS5
+	}
+	switch scheme {
+	case ProxySchemeHTTP, ProxySchemeHTTPS, ProxySchemeSOCKS5:
+	default:
+		return nil, false, fmt.Errorf("%w %q: unsupported scheme %q (use http, https, socks5, socks5h, or direct)", ErrInvalidProxyURL, trimmed, parsed.Scheme)
+	}
+	if strings.TrimSpace(parsed.Host) == "" {
+		return nil, false, fmt.Errorf("%w %q: missing host", ErrInvalidProxyURL, trimmed)
+	}
+	return parsed, false, nil
+}
+
+// MaskProxyURL redacts any embedded password in a proxy URL for safe terminal display.
+func MaskProxyURL(ctx context.Context, raw string) string {
+	_ = ctx
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return ""
+	}
+	parsed, err := url.Parse(trimmed)
+	if err != nil || parsed.User == nil {
+		return trimmed
+	}
+	if _, hasPass := parsed.User.Password(); !hasPass {
+		return trimmed
+	}
+	clone := *parsed
+	clone.User = url.UserPassword(parsed.User.Username(), "***")
+	return clone.String()
+}
+
+func buildTransport(ctx context.Context, proxyURL string) (*http.Transport, error) {
+	base, ok := http.DefaultTransport.(*http.Transport)
+	var transport *http.Transport
+	if ok {
+		transport = base.Clone()
+	} else {
+		transport = &http.Transport{}
+	}
+
+	parsed, direct, err := ParseProxyURL(ctx, proxyURL)
+	if err != nil {
+		return nil, err
+	}
+	switch {
+	case direct:
+		transport.Proxy = nil
+	case parsed != nil:
+		transport.Proxy = http.ProxyURL(parsed)
+	default:
+		transport.Proxy = http.ProxyFromEnvironment
+	}
+	return transport, nil
 }

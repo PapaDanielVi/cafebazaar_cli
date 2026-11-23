@@ -160,6 +160,7 @@ func TestReadEnvSettings(t *testing.T) {
 		config.EnvCI:             "1",
 		config.EnvYes:            "yes",
 		config.EnvRTL:            "OFF",
+		config.EnvProxy:          "socks5://127.0.0.1:1080",
 	}
 	env := config.ReadEnv(ctx, func(key string) (string, bool) {
 		v, ok := values[key]
@@ -172,7 +173,7 @@ func TestReadEnvSettings(t *testing.T) {
 	if env.AutoPublish == nil || !*env.AutoPublish {
 		t.Fatalf("expected auto publish true, got %v", env.AutoPublish)
 	}
-	if env.Rollout != 25 || !env.CI || !env.Yes || env.RTL != "off" {
+	if env.Rollout != 25 || !env.CI || !env.Yes || env.RTL != "off" || env.Proxy != "socks5://127.0.0.1:1080" {
 		t.Fatalf("unexpected env flags: %+v", env)
 	}
 }

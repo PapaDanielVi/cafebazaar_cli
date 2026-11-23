@@ -253,3 +253,49 @@ func TestInitNewAppCapturesReturnedAppToken(t *testing.T) {
 		t.Fatalf("got saved token %q, want issued-app-token-777", savedTok)
 	}
 }
+
+func TestCLIProxyFlagRoutesRequestsThroughProxy(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	var hitProxy bool
+	proxySrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hitProxy = true
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"type":"success","release":{"packages":[{"version_code":21,"version_name":"2.1.0"}]}}`))
+	}))
+	defer proxySrv.Close()
+
+	cfgPath := filepath.Join(t.TempDir(), "config.yaml")
+	var outBuf, errBuf bytes.Buffer
+	cmd := cli.NewRootCmd(ctx, cli.Dependencies{
+		In:              strings.NewReader(""),
+		Out:             &outBuf,
+		Err:             &errBuf,
+		WorkDir:         t.TempDir(),
+		PishkhanBaseURL: "http://api.pishkhan.cafebazaar.ir",
+		LookupEnv: func(key string) (string, bool) {
+			switch key {
+			case config.EnvConfig:
+				return cfgPath, true
+			case config.EnvAppToken:
+				return "ci-app-token", true
+			case config.EnvCI:
+				return "1", true
+			default:
+				return "", false
+			}
+		},
+	})
+	cmd.SetArgs([]string{"release", "status", "--only", "published", "--proxy", proxySrv.URL, "--output", "json"})
+
+	if err := cmd.ExecuteContext(ctx); err != nil {
+		t.Fatalf("release status via --proxy failed: %v", err)
+	}
+	if !hitProxy {
+		t.Fatal("expected CLI command to route through proxy server")
+	}
+	if !strings.Contains(outBuf.String(), `"version_code": 21`) {
+		t.Fatalf("unexpected proxied output: %s", outBuf.String())
+	}
+}

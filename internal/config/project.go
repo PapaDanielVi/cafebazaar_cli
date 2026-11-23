@@ -28,6 +28,7 @@ type ProjectConfig struct {
 	Module          string            `yaml:"module,omitempty"`
 	DefaultVariant  string            `yaml:"default_variant,omitempty"`
 	Apps            map[string]string `yaml:"apps,omitempty"`
+	Proxy           string            `yaml:"proxy,omitempty"`
 	TagPrefix       string            `yaml:"tag_prefix,omitempty"`
 	CommitTemplate  string            `yaml:"commit_template,omitempty"`
 	AutoPublish     *bool             `yaml:"auto_publish,omitempty"`

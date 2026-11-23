@@ -25,6 +25,7 @@
 - **Dynamic shell autocomplete**: tab-completes `--app`, `--variant`, and artifact file paths using your live Gradle build types, registered apps, and `build/outputs/` files.
 - **Persian (Farsi) UTF-8 rendering**: pure-Go Persian glyph shaper (all 32 Persian letters, Lam-Alef ligatures, ZWNJ `\u200c`, embedded LTR runs) with `--rtl auto|on|off` for terminals without native BiDi, while keeping JSON/YAML and piped stdout in unmodified logical UTF-8.
 - **Interactive UI and Headless CI/CD mode**: styled emerald cards, tables, star ratings, spinners, and upload progress bars locally; automatic or flag-driven headless plain/JSON/YAML mode (`--no-ui`, `--plain`, `CI=true`) with full environment variable support and deterministic exit codes.
+- **Proxy support**: route CafeBazaar API calls and uploads through HTTP, HTTPS, or SOCKS5 (`socks5://` / `socks5h://`) proxies via `--proxy`, `BAZAAR_PROXY` / `CAFEBAZAAR_PROXY`, `.bazaar.yaml`, `~/.config/bazaar/config.yaml`, or standard `HTTP_PROXY`/`HTTPS_PROXY` variables.
 - **Safety confirmations**: every destructive or externally visible action (`release delete`, `release commit`, `publish`, `review reply`, `app create`, token overwrite/removal) asks for confirmation interactively (defaulting to No) and refuses to run in CI without `--yes` (`-y`) or `CAFEBAZAAR_YES=1`.
 
 ---
@@ -42,7 +43,7 @@ curl -fsSL https://raw.githubusercontent.com/PapaDanielVi/cafebazaar_cli/master/
 Install a specific version or custom directory:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/PapaDanielVi/cafebazaar_cli/master/scripts/install.sh | bash -s -- -v v0.1.0-beta.2 -d "$HOME/.local/bin"
+curl -fsSL https://raw.githubusercontent.com/PapaDanielVi/cafebazaar_cli/master/scripts/install.sh | bash -s -- -v v0.1.0-beta.3 -d "$HOME/.local/bin"
 ```
 
 ### Windows (PowerShell)
@@ -54,7 +55,7 @@ irm https://raw.githubusercontent.com/PapaDanielVi/cafebazaar_cli/master/scripts
 To pin a version in PowerShell:
 
 ```powershell
-$env:BAZAAR_VERSION = "v0.1.0-beta.2"
+$env:BAZAAR_VERSION = "v0.1.0-beta.3"
 irm https://raw.githubusercontent.com/PapaDanielVi/cafebazaar_cli/master/scripts/install.ps1 | iex
 ```
 
@@ -257,6 +258,40 @@ Most CafeBazaar changelogs, user comments, and API error messages are written in
 
 ---
 
+## Proxy Support
+
+`bazaar` supports HTTP, HTTPS, and SOCKS5 proxies (with optional `user:password` credentials) for all CafeBazaar API requests and APK/AAB uploads. This is helpful when publishing from CI runners outside Iran or behind corporate firewalls.
+
+Supported proxy formats:
+- `http://proxy.example.com:8080`
+- `http://user:pass@proxy.example.com:8080`
+- `https://proxy.example.com:8443`
+- `socks5://127.0.0.1:1080` or `socks5h://user:pass@127.0.0.1:1080`
+- `direct` or `none` (ignores system `HTTP_PROXY`/`HTTPS_PROXY` variables and connects directly)
+
+Precedence order (highest first):
+1. `--proxy <url>` CLI flag
+2. `BAZAAR_PROXY` or `CAFEBAZAAR_PROXY` environment variable (scopes proxy to `bazaar` only, leaving Gradle and Git untouched)
+3. `proxy` in `.bazaar.yaml`
+4. `proxy` in `~/.config/bazaar/config.yaml`
+5. Standard `HTTPS_PROXY`, `HTTP_PROXY`, `ALL_PROXY`, and `NO_PROXY` environment variables
+
+Examples:
+
+```bash
+# Direct CLI flag
+bazaar publish --proxy socks5://127.0.0.1:1080 --apk app-release.apk
+
+# Environment variable in CI (does not affect ./gradlew)
+export CAFEBAZAAR_PROXY="http://user:pass@ir-proxy.example.com:8080"
+bazaar publish --apk app-release.apk --yes --no-ui
+
+# Bypass a system VPN/proxy for CafeBazaar only
+bazaar status --proxy direct
+```
+
+---
+
 ## Headless CI/CD Mode
 
 In CI pipelines (`CI=true`, non-TTY streams, `--no-ui`, or `--plain`), `bazaar` switches to headless mode with zero TUI redraws, no ANSI colors, milestone upload logs (`25%`, `50%`, `75%`, `100%`), and predictable exit codes.
@@ -363,6 +398,8 @@ publish_cafebazaar:
 | `BAZAAR_RTL` | Persian terminal shaping (`auto`, `on`, `off`) |
 | `BAZAAR_NO_KEYRING` | Skip OS keychain and use `0600` credentials file |
 | `BAZAAR_CONFIG` | Custom global `config.yaml` path |
+| `BAZAAR_PROXY` / `CAFEBAZAAR_PROXY` | HTTP, HTTPS, or SOCKS5 proxy URL (or `direct` to bypass system proxy) |
+| `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY` | Standard system proxy fallback when no explicit bazaar proxy is set |
 | `NO_COLOR` | Disable ANSI color output |
 
 ### Exit Codes
@@ -390,6 +427,7 @@ apps:
   release: com.example.myapp
   staging: com.example.myapp.staging
   debug: com.example.myapp.debug
+proxy: "http://proxy.example.com:8080"
 tag_prefix: v
 commit_template: "chore(release): bump version to v%s (%d)"
 auto_publish: false

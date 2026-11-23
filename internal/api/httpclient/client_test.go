@@ -251,4 +251,86 @@ func TestClientValidationErrors(t *testing.T) {
 	if _, err := httpclient.New(ctx, httpclient.Config{BaseURL: "https://example.com"}); !errors.Is(err, httpclient.ErrEmptyToken) {
 		t.Fatalf("got %v, want ErrEmptyToken", err)
 	}
+	if _, err := httpclient.New(ctx, httpclient.Config{BaseURL: "https://example.com", Token: testToken, ProxyURL: "ftp://bad-proxy:21"}); !errors.Is(err, httpclient.ErrInvalidProxyURL) {
+		t.Fatalf("got %v, want ErrInvalidProxyURL", err)
+	}
+}
+
+func TestClientRoutesRequestsThroughHTTPProxy(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	var proxiedRequestURL string
+	proxySrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		proxiedRequestURL = r.URL.String()
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"proxied":true}`))
+	}))
+	defer proxySrv.Close()
+
+	client, err := httpclient.New(ctx, httpclient.Config{
+		BaseURL:  "http://api.pishkhan.cafebazaar.ir",
+		Token:    testToken,
+		ProxyURL: proxySrv.URL,
+	})
+	if err != nil {
+		t.Fatalf("new proxied client: %v", err)
+	}
+
+	var out struct {
+		Proxied bool `json:"proxied"`
+	}
+	if _, err := client.DoJSON(ctx, http.MethodGet, testEndpoint, nil, nil, &out); err != nil {
+		t.Fatalf("proxied request failed: %v", err)
+	}
+	if !out.Proxied || proxiedRequestURL != "http://api.pishkhan.cafebazaar.ir/v1/test/" {
+		t.Fatalf("expected request routed through proxy, got proxied=%v url=%q", out.Proxied, proxiedRequestURL)
+	}
+}
+
+func TestParseAndMaskProxyURL(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	tests := []struct {
+		name       string
+		raw        string
+		wantScheme string
+		wantDirect bool
+		wantErr    bool
+		wantMasked string
+	}{
+		{name: "empty uses env", raw: "", wantMasked: ""},
+		{name: "direct bypasses env", raw: "direct", wantDirect: true, wantMasked: "direct"},
+		{name: "none bypasses env", raw: "none", wantDirect: true, wantMasked: "none"},
+		{name: "socks5h normalized to socks5", raw: "socks5h://user:topsecret@127.0.0.1:1080", wantScheme: "socks5", wantMasked: "socks5h://user:%2A%2A%2A@127.0.0.1:1080"},
+		{name: "http with auth masked", raw: "http://dev:pass123@proxy.local:8080", wantScheme: "http", wantMasked: "http://dev:%2A%2A%2A@proxy.local:8080"},
+		{name: "unsupported scheme rejected", raw: "ssh://proxy.local:22", wantErr: true},
+		{name: "missing host rejected", raw: "http://", wantErr: true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			parsed, direct, err := httpclient.ParseProxyURL(ctx, tc.raw)
+			if tc.wantErr {
+				if !errors.Is(err, httpclient.ErrInvalidProxyURL) {
+					t.Fatalf("got err=%v, want ErrInvalidProxyURL", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected err: %v", err)
+			}
+			if direct != tc.wantDirect {
+				t.Fatalf("got direct=%v, want %v", direct, tc.wantDirect)
+			}
+			if tc.wantScheme != "" && (parsed == nil || parsed.Scheme != tc.wantScheme) {
+				t.Fatalf("got parsed=%v, want scheme %q", parsed, tc.wantScheme)
+			}
+			if gotMasked := httpclient.MaskProxyURL(ctx, tc.raw); gotMasked != tc.wantMasked {
+				t.Fatalf("got masked %q, want %q", gotMasked, tc.wantMasked)
+			}
+		})
+	}
 }

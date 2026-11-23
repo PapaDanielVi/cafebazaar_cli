@@ -24,6 +24,18 @@ const (
 	ContentTypeOctetStream = "application/octet-stream"
 	// DefaultUserAgent identifies the bazaar CLI in outgoing API requests.
 	DefaultUserAgent = "bazaar-cli/1.0"
+	// ProxyDirect bypasses all environment proxy settings and connects directly.
+	ProxyDirect = "direct"
+	// ProxyNone bypasses all environment proxy settings and connects directly.
+	ProxyNone = "none"
+	// ProxySchemeHTTP is the HTTP proxy URL scheme.
+	ProxySchemeHTTP = "http"
+	// ProxySchemeHTTPS is the HTTPS proxy URL scheme.
+	ProxySchemeHTTPS = "https"
+	// ProxySchemeSOCKS5 is the SOCKS5 proxy URL scheme.
+	ProxySchemeSOCKS5 = "socks5"
+	// ProxySchemeSOCKS5H is curl's DNS-over-SOCKS5 proxy URL scheme alias.
+	ProxySchemeSOCKS5H = "socks5h"
 )
 
 var (
@@ -33,6 +45,8 @@ var (
 	ErrEmptyToken = errors.New("api token must not be empty")
 	// ErrEmptyFilePath indicates that no upload file path was provided.
 	ErrEmptyFilePath = errors.New("upload file path must not be empty")
+	// ErrInvalidProxyURL indicates that a configured proxy URL could not be parsed or uses an unsupported scheme.
+	ErrInvalidProxyURL = errors.New("invalid proxy URL")
 )
 
 // APIError represents a non-2xx HTTP response returned by a CafeBazaar API.

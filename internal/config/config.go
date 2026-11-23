@@ -59,6 +59,7 @@ type AppEntry struct {
 type GlobalConfig struct {
 	DefaultApp string              `yaml:"default_app,omitempty"`
 	RTLMode    string              `yaml:"rtl_mode,omitempty"`
+	Proxy      string              `yaml:"proxy,omitempty"`
 	Publisher  *PublisherConfig    `yaml:"publisher,omitempty"`
 	Apps       map[string]AppEntry `yaml:"apps,omitempty"`
 }

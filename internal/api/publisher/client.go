@@ -26,6 +26,7 @@ type Config struct {
 	BaseURL        string
 	Token          string
 	AuthHeaderName string
+	ProxyURL       string
 	HTTPClient     *http.Client
 	MaxRetries     int
 	RetryWait      time.Duration
@@ -45,6 +46,7 @@ func New(ctx context.Context, cfg Config) (*Client, error) {
 		BaseURL:        baseURL,
 		Token:          cfg.Token,
 		AuthHeaderName: headerName,
+		ProxyURL:       cfg.ProxyURL,
 		HTTPClient:     cfg.HTTPClient,
 		MaxRetries:     cfg.MaxRetries,
 		RetryWait:      cfg.RetryWait,
