@@ -281,11 +281,7 @@ jobs:
         run: ./gradlew :app:assembleRelease
 
       - name: Install bazaar CLI
-        uses: actions/setup-go@v5
-        with:
-          go-version: "1.24"
-
-      - run: go install github.com/PapaDanielVi/cafebazaar_cli/cmd/bazaar@latest
+        run: curl -fsSL https://raw.githubusercontent.com/PapaDanielVi/cafebazaar_cli/master/scripts/install.sh | bash
 
       - name: Upload and submit to CafeBazaar
         env:
@@ -300,6 +296,51 @@ jobs:
             --changelog-en "Release ${{ github.ref_name }}" \
             --rollout 100 \
             --output json
+```
+
+### GitLab CI Example
+
+Add `CAFEBAZAAR_APP_TOKEN` as a masked CI/CD variable under **Settings -> CI/CD -> Variables**, then add this to `.gitlab-ci.yml`:
+
+```yaml
+stages:
+  - build
+  - publish
+
+build_apk:
+  stage: build
+  image: ghcr.io/cirruslabs/android-sdk:35
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v/'
+  script:
+    - ./gradlew :app:assembleRelease
+  artifacts:
+    paths:
+      - app/build/outputs/apk/release/*.apk
+    expire_in: 1 day
+
+publish_cafebazaar:
+  stage: publish
+  image: debian:bookworm-slim
+  needs:
+    - build_apk
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v/'
+  variables:
+    CAFEBAZAAR_YES: "1"
+    BAZAAR_NO_UI: "1"
+  before_script:
+    - apt-get update && apt-get install -y --no-install-recommends curl ca-certificates tar
+    - curl -fsSL https://raw.githubusercontent.com/PapaDanielVi/cafebazaar_cli/master/scripts/install.sh | bash
+  script:
+    - |
+      bazaar publish \
+        --apk app/build/outputs/apk/release/app-release.apk \
+        --arch all \
+        --changelog-fa-file changelogs/fa.txt \
+        --changelog-en "Release ${CI_COMMIT_TAG}" \
+        --rollout 100 \
+        --output json
 ```
 
 ### Environment Variables
