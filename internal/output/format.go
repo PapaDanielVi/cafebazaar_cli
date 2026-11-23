@@ -100,6 +100,7 @@ func (p *Printer) PrintCard(ctx context.Context, title string, items []KeyValue)
 		return nil
 	}
 
+	cardWidth := p.cardWidth(ctx)
 	var b strings.Builder
 	if title != "" {
 		b.WriteString(p.Theme.Header.Render(p.Text(ctx, title)))
@@ -111,19 +112,58 @@ func (p *Printer) PrintCard(ctx context.Context, title string, items []KeyValue)
 			maxKey = len(item.Key)
 		}
 	}
+	labelColWidth := maxKey + 3
+	// Reserve 6 columns for left/right rounded borders and horizontal padding (2 each side + 2 borders).
+	valueMaxRunes := cardWidth - labelColWidth - 6
+	if valueMaxRunes < 24 {
+		valueMaxRunes = 24
+	}
+	continuationIndent := strings.Repeat(" ", labelColWidth)
+
 	for idx, item := range items {
 		pad := strings.Repeat(" ", maxKey-len(item.Key)+2)
+		wrapped := WrapRunes(ctx, item.Value, valueMaxRunes)
 		b.WriteString(p.Theme.Label.Render(item.Key + ":"))
 		b.WriteString(pad)
-		b.WriteString(p.Theme.Value.Render(p.Text(ctx, item.Value)))
+		b.WriteString(p.renderCardValueLine(ctx, wrapped[0]))
+		for _, extraLine := range wrapped[1:] {
+			b.WriteByte('\n')
+			b.WriteString(continuationIndent)
+			b.WriteString(p.renderCardValueLine(ctx, extraLine))
+		}
 		if idx < len(items)-1 {
 			b.WriteByte('\n')
 		}
 	}
-	if _, err := fmt.Fprintln(p.Out, p.Theme.Card.Render(b.String())); err != nil {
+	cardStyle := p.Theme.Card.MaxWidth(cardWidth)
+	if _, err := fmt.Fprintln(p.Out, cardStyle.Render(b.String())); err != nil {
 		return fmt.Errorf("write styled card: %w", err)
 	}
 	return nil
+}
+
+func (p *Printer) renderCardValueLine(ctx context.Context, line string) string {
+	if ContainsPersian(ctx, line) {
+		// Keep Persian lines in regular weight so Arabic fallback fonts do not drift past borders.
+		return AnchorBiDiLine(ctx, line, p.Mode.RTL)
+	}
+	return p.Theme.Value.Render(p.Text(ctx, line))
+}
+
+func (p *Printer) cardWidth(ctx context.Context) int {
+	_ = ctx
+	w := p.Mode.Width
+	if w <= 0 {
+		w = defaultTerminalWidth
+	}
+	available := w - 2
+	if available > maxCardWidth {
+		return maxCardWidth
+	}
+	if available < minTerminalWidth {
+		return minTerminalWidth
+	}
+	return available
 }
 
 // PrintTable prints a styled table or tab-delimited rows with Persian-aware cell formatting.

@@ -82,3 +82,28 @@ func TestTruncateRunesRespectsUTF8AndZWNJ(t *testing.T) {
 		t.Fatalf("expected no trailing ZWNJ before ellipsis, got %q", got)
 	}
 }
+
+func TestSanitizeInlineWrapRunesAndANSISafety(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	dirty := "رفع مشکل\r\n\tضبط صدا\u200f و هماهنگ\u202e کردن"
+	clean := output.SanitizeInline(ctx, dirty)
+	if clean != "رفع مشکل ضبط صدا و هماهنگ کردن" {
+		t.Fatalf("unexpected sanitized string: %q", clean)
+	}
+
+	wrapped := output.WrapRunes(ctx, "\x1b[32mPUBLISHED\x1b[0m v1.7\nرفع مشکل ضبط صدا و هماهنگ کردن فایل صوتی در ویدیو", 24)
+	if len(wrapped) < 3 {
+		t.Fatalf("expected ANSI first line + wrapped Persian lines, got %#v", wrapped)
+	}
+	if !strings.Contains(wrapped[0], "\x1b[32mPUBLISHED\x1b[0m") {
+		t.Fatalf("expected ANSI line untouched, got %q", wrapped[0])
+	}
+
+	ansiMixed := "\x1b[32mOK\x1b[0m پیام فارسی"
+	formatted := output.FormatDisplayText(ctx, ansiMixed, true)
+	if !strings.Contains(formatted, "\x1b[32mOK\x1b[0m") {
+		t.Fatalf("expected ANSI escape sequence preserved during RTL shaping, got %q", formatted)
+	}
+}

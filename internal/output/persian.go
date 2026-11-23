@@ -2,6 +2,7 @@ package output
 
 import (
 	"context"
+	"regexp"
 	"strings"
 	"unicode"
 )
@@ -12,7 +13,10 @@ const (
 	runeLam  = '\u0644'
 
 	truncationEllipsis = "..."
+	bidiAnchorSuffix   = "\u200F\u200E"
 )
+
+var ansiEscapeRe = regexp.MustCompile(`\x1b\[[0-9;]*[A-Za-z]`)
 
 type glyphForms struct {
 	isolated rune
@@ -88,6 +92,110 @@ func ContainsPersian(ctx context.Context, text string) bool {
 	return false
 }
 
+// SanitizeInline collapses newlines, tabs, and stray BiDi override marks into clean single-line text.
+func SanitizeInline(ctx context.Context, text string) string {
+	_ = ctx
+	var b strings.Builder
+	b.Grow(len(text))
+	lastSpace := false
+	for _, r := range text {
+		if isBiDiControlRune(ctx, r) {
+			continue
+		}
+		if r == '\r' || r == '\n' || r == '\t' || unicode.IsSpace(r) {
+			if !lastSpace && b.Len() > 0 {
+				b.WriteByte(' ')
+				lastSpace = true
+			}
+			continue
+		}
+		b.WriteRune(r)
+		lastSpace = false
+	}
+	return strings.TrimSpace(b.String())
+}
+
+// WrapRunes wraps text into lines of at most maxRunes runes while preserving explicit newlines.
+func WrapRunes(ctx context.Context, text string, maxRunes int) []string {
+	if maxRunes <= 0 {
+		return strings.Split(text, "\n")
+	}
+
+	paragraphs := strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n")
+	var out []string
+	for _, para := range paragraphs {
+		// Keep lines containing ANSI styling intact rather than splitting escape codes.
+		if ansiEscapeRe.MatchString(para) {
+			out = append(out, para)
+			continue
+		}
+		cleaned := stripBiDiControls(ctx, para)
+		if strings.TrimSpace(cleaned) == "" {
+			out = append(out, "")
+			continue
+		}
+		words := strings.Fields(cleaned)
+		var cur strings.Builder
+		curLen := 0
+		for _, word := range words {
+			wRunes := []rune(word)
+			wLen := len(wRunes)
+			if curLen == 0 {
+				if wLen <= maxRunes {
+					cur.WriteString(word)
+					curLen = wLen
+					continue
+				}
+				for start := 0; start < wLen; start += maxRunes {
+					end := start + maxRunes
+					if end > wLen {
+						end = wLen
+					}
+					out = append(out, string(wRunes[start:end]))
+				}
+				continue
+			}
+			if curLen+1+wLen <= maxRunes {
+				cur.WriteByte(' ')
+				cur.WriteString(word)
+				curLen += 1 + wLen
+				continue
+			}
+			out = append(out, cur.String())
+			cur.Reset()
+			if wLen <= maxRunes {
+				cur.WriteString(word)
+				curLen = wLen
+			} else {
+				curLen = 0
+				for start := 0; start < wLen; start += maxRunes {
+					end := start + maxRunes
+					if end > wLen {
+						end = wLen
+					}
+					out = append(out, string(wRunes[start:end]))
+				}
+			}
+		}
+		if curLen > 0 {
+			out = append(out, cur.String())
+		}
+	}
+	if len(out) == 0 {
+		return []string{""}
+	}
+	return out
+}
+
+// AnchorBiDiLine keeps trailing punctuation inside a Persian run and resets BiDi to LTR before right borders.
+func AnchorBiDiLine(ctx context.Context, line string, rtlEnabled bool) string {
+	formatted := FormatDisplayText(ctx, line, rtlEnabled)
+	if !rtlEnabled && ContainsPersian(ctx, line) {
+		return formatted + bidiAnchorSuffix
+	}
+	return formatted
+}
+
 // FormatDisplayText applies Persian glyph shaping and BiDi ordering when rtlEnabled is true.
 func FormatDisplayText(ctx context.Context, text string, rtlEnabled bool) string {
 	if !rtlEnabled || !ContainsPersian(ctx, text) {
@@ -95,12 +203,62 @@ func FormatDisplayText(ctx context.Context, text string, rtlEnabled bool) string
 	}
 	lines := strings.Split(text, "\n")
 	for i, line := range lines {
-		if ContainsPersian(ctx, line) {
-			shaped := shapePersian(ctx, line)
-			lines[i] = reorderBiDiLine(ctx, shaped)
+		if !ContainsPersian(ctx, line) {
+			continue
 		}
+		if ansiEscapeRe.MatchString(line) {
+			lines[i] = formatANSISafeLine(ctx, line)
+			continue
+		}
+		shaped := shapePersian(ctx, stripBiDiControls(ctx, line))
+		lines[i] = reorderBiDiLine(ctx, shaped)
 	}
 	return strings.Join(lines, "\n")
+}
+
+func formatANSISafeLine(ctx context.Context, line string) string {
+	indices := ansiEscapeRe.FindAllStringIndex(line, -1)
+	if len(indices) == 0 {
+		return reorderBiDiLine(ctx, shapePersian(ctx, stripBiDiControls(ctx, line)))
+	}
+	var b strings.Builder
+	b.Grow(len(line))
+	pos := 0
+	for _, span := range indices {
+		segment := line[pos:span[0]]
+		if ContainsPersian(ctx, segment) {
+			b.WriteString(reorderBiDiLine(ctx, shapePersian(ctx, stripBiDiControls(ctx, segment))))
+		} else {
+			b.WriteString(segment)
+		}
+		b.WriteString(line[span[0]:span[1]])
+		pos = span[1]
+	}
+	tail := line[pos:]
+	if ContainsPersian(ctx, tail) {
+		b.WriteString(reorderBiDiLine(ctx, shapePersian(ctx, stripBiDiControls(ctx, tail))))
+	} else {
+		b.WriteString(tail)
+	}
+	return b.String()
+}
+
+func stripBiDiControls(ctx context.Context, s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range s {
+		if !isBiDiControlRune(ctx, r) {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
+func isBiDiControlRune(ctx context.Context, r rune) bool {
+	_ = ctx
+	return r == '\u200E' || r == '\u200F' ||
+		(r >= '\u202A' && r <= '\u202E') ||
+		(r >= '\u2066' && r <= '\u2069')
 }
 
 // TruncateRunes truncates s to at most maxRunes visible runes without splitting UTF-8 or ZWNJ.

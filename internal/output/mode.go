@@ -86,6 +86,12 @@ type ModeInput struct {
 	LookupEnv   func(string) (string, bool)
 }
 
+const (
+	defaultTerminalWidth = 88
+	minTerminalWidth     = 48
+	maxCardWidth         = 100
+)
+
 // RuntimeMode controls how bazaar renders output, handles Persian text, and prompts the user.
 type RuntimeMode struct {
 	Interactive bool
@@ -94,6 +100,7 @@ type RuntimeMode struct {
 	RTL         bool
 	Yes         bool
 	Verbose     bool
+	Width       int
 }
 
 // ResolveMode determines interactive UI vs headless CI/CD mode, color, format, and Persian RTL shaping.
@@ -164,7 +171,24 @@ func ResolveMode(ctx context.Context, in ModeInput) RuntimeMode {
 		RTL:         rtl,
 		Yes:         in.FlagYes || in.Env.Yes,
 		Verbose:     in.FlagVerbose,
+		Width:       detectTerminalWidth(ctx, in.Stdout),
 	}
+}
+
+func detectTerminalWidth(ctx context.Context, w io.Writer) int {
+	_ = ctx
+	f, ok := w.(*os.File)
+	if !ok {
+		return defaultTerminalWidth
+	}
+	width, _, err := term.GetSize(int(f.Fd()))
+	if err != nil || width <= 0 {
+		return defaultTerminalWidth
+	}
+	if width < minTerminalWidth {
+		return minTerminalWidth
+	}
+	return width
 }
 
 func hasNativeBiDiTerminal(ctx context.Context, lookup func(string) (string, bool)) bool {

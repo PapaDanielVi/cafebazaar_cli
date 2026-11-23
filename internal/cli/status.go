@@ -144,8 +144,12 @@ func formatReleaseSummary(ctx context.Context, p *output.Printer, badge string, 
 		fmt.Sprintf("rollout=%d%%", rel.StagedRolloutPercentage),
 		fmt.Sprintf("auto_publish=%v", rel.AutoPublish),
 	}
-	if rel.ChangelogFA != nil && strings.TrimSpace(*rel.ChangelogFA) != "" {
-		parts = append(parts, "FA: "+output.TruncateRunes(ctx, strings.TrimSpace(*rel.ChangelogFA), 40))
+	summary := strings.Join(parts, "  ")
+	if rel.ChangelogFA != nil {
+		cleanFA := output.SanitizeInline(ctx, *rel.ChangelogFA)
+		if cleanFA != "" {
+			summary += "\nFA: " + output.TruncateRunes(ctx, cleanFA, 68)
+		}
 	}
-	return strings.Join(parts, "  ")
+	return summary
 }

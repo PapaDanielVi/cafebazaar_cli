@@ -9,6 +9,7 @@ import (
 
 	"github.com/PapaDanielVi/cafebazaar_cli/internal/config"
 	"github.com/PapaDanielVi/cafebazaar_cli/internal/output"
+	"github.com/charmbracelet/lipgloss"
 )
 
 func TestConfirmDangerousActionBehavior(t *testing.T) {
@@ -106,5 +107,48 @@ func TestJSONPreservesRawPersianUTF8(t *testing.T) {
 	}
 	if !strings.Contains(outBuf.String(), persian) {
 		t.Fatalf("expected raw UTF-8 Persian string in JSON, got %q", outBuf.String())
+	}
+}
+
+func TestPrintCardWithPersianKeepsClosedBoxAndWraps(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	var outBuf, errBuf bytes.Buffer
+	p := output.NewPrinter(ctx, strings.NewReader(""), &outBuf, &errBuf, output.RuntimeMode{
+		Interactive: true,
+		Color:       true,
+		Format:      output.FormatTable,
+		RTL:         false,
+		Width:       72,
+	})
+
+	val := p.Theme.RenderBadge(ctx, "PUBLISHED") + "  v1.7 (code 8)\nFA: رفع مشکل ضبط صدا و هماهنگ کردن فایل صوتی در اندروید با کیفیت بهتر"
+	if err := p.PrintCard(ctx, "CafeBazaar App Status", []output.KeyValue{
+		{Key: "Package Name", Value: "ir.negarotion.studio"},
+		{Key: "Published", Value: val},
+	}); err != nil {
+		t.Fatalf("print card: %v", err)
+	}
+
+	rendered := outBuf.String()
+	lines := strings.Split(strings.TrimSpace(rendered), "\n")
+	if len(lines) < 5 {
+		t.Fatalf("expected wrapped multi-line card, got:\n%s", rendered)
+	}
+	if !strings.Contains(lines[0], "╭") || !strings.Contains(lines[0], "╮") {
+		t.Fatalf("expected closed top border, got %q", lines[0])
+	}
+	last := lines[len(lines)-1]
+	if !strings.Contains(last, "╰") || !strings.Contains(last, "╯") {
+		t.Fatalf("expected closed bottom border, got %q", last)
+	}
+	for i := 1; i < len(lines)-1; i++ {
+		if !strings.Contains(lines[i], "│") || !strings.HasSuffix(strings.TrimSpace(lines[i]), "│") {
+			t.Fatalf("expected closed right border on row %d, got %q", i, lines[i])
+		}
+	}
+	if w := lipgloss.Width("\u200F\u200E"); w != 0 {
+		t.Fatalf("expected zero display width for RLM+LRM marks, got %d", w)
 	}
 }

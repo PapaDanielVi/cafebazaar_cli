@@ -43,7 +43,7 @@ curl -fsSL https://raw.githubusercontent.com/PapaDanielVi/cafebazaar_cli/master/
 Install a specific version or custom directory:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/PapaDanielVi/cafebazaar_cli/master/scripts/install.sh | bash -s -- -v v0.1.0-beta.3 -d "$HOME/.local/bin"
+curl -fsSL https://raw.githubusercontent.com/PapaDanielVi/cafebazaar_cli/master/scripts/install.sh | bash -s -- -v v0.1.0-beta.4 -d "$HOME/.local/bin"
 ```
 
 ### Windows (PowerShell)
@@ -55,8 +55,27 @@ irm https://raw.githubusercontent.com/PapaDanielVi/cafebazaar_cli/master/scripts
 To pin a version in PowerShell:
 
 ```powershell
-$env:BAZAAR_VERSION = "v0.1.0-beta.3"
+$env:BAZAAR_VERSION = "v0.1.0-beta.4"
 irm https://raw.githubusercontent.com/PapaDanielVi/cafebazaar_cli/master/scripts/install.ps1 | iex
+```
+
+### Docker / GitHub Container Registry (GHCR)
+
+Multi-arch images (`linux/amd64`, `linux/arm64`) are published to GHCR for CI/CD runners and cloud jobs:
+
+```bash
+# Latest beta image
+docker pull ghcr.io/papadanielvi/cafebazaar_cli:beta
+
+# Pinned version
+docker pull ghcr.io/papadanielvi/cafebazaar_cli:v0.1.0-beta.4
+
+# Run against your local project directory
+docker run --rm \
+  -v "$PWD:/workspace" \
+  -e CAFEBAZAAR_APP_TOKEN="$CAFEBAZAAR_APP_TOKEN" \
+  -e CAFEBAZAAR_YES=1 \
+  ghcr.io/papadanielvi/cafebazaar_cli:beta status --output json
 ```
 
 ### Using Go
@@ -356,7 +375,9 @@ build_apk:
 
 publish_cafebazaar:
   stage: publish
-  image: debian:bookworm-slim
+  image:
+    name: ghcr.io/papadanielvi/cafebazaar_cli:beta
+    entrypoint: [""]
   needs:
     - build_apk
   rules:
@@ -364,9 +385,6 @@ publish_cafebazaar:
   variables:
     CAFEBAZAAR_YES: "1"
     BAZAAR_NO_UI: "1"
-  before_script:
-    - apt-get update && apt-get install -y --no-install-recommends curl ca-certificates tar
-    - curl -fsSL https://raw.githubusercontent.com/PapaDanielVi/cafebazaar_cli/master/scripts/install.sh | bash
   script:
     - |
       bazaar publish \

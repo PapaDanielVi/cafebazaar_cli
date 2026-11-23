@@ -68,7 +68,7 @@ func (p *Printer) renderDangerSummary(ctx context.Context, req ConfirmRequest) e
 		b.WriteString(fmt.Sprintf("Target App: %s\n", req.TargetApp))
 	}
 	for _, d := range req.Details {
-		b.WriteString(fmt.Sprintf("%s: %s\n", d.Key, p.Text(ctx, d.Value)))
+		b.WriteString(fmt.Sprintf("%s: %s\n", d.Key, AnchorBiDiLine(ctx, d.Value, p.Mode.RTL)))
 	}
 	if req.Warning != "" {
 		b.WriteString("\n")
@@ -81,7 +81,7 @@ func (p *Printer) renderDangerSummary(ctx context.Context, req ConfirmRequest) e
 
 	rendered := strings.TrimRight(b.String(), "\n")
 	if p.Theme.Enabled {
-		rendered = p.Theme.DangerCard.Render(rendered)
+		rendered = p.Theme.DangerCard.MaxWidth(p.cardWidth(ctx)).Render(rendered)
 	}
 	if _, err := fmt.Fprintln(p.Err, rendered); err != nil {
 		return fmt.Errorf("write danger confirmation card: %w", err)
