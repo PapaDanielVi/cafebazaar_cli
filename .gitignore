@@ -1,4 +1,5 @@
 bin/
+dist/
 /bazaar
 *.out
 coverage.txt

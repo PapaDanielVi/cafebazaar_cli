@@ -31,7 +31,34 @@
 
 ## Installation
 
-### From Go
+No Go toolchain is required for prebuilt binaries. Pick the one-liner for your platform below, or install via Go.
+
+### Linux, macOS, and Windows (Git Bash / WSL)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/PapaDanielVi/cafebazaar_cli/master/scripts/install.sh | bash
+```
+
+Install a specific version or custom directory:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/PapaDanielVi/cafebazaar_cli/master/scripts/install.sh | bash -s -- -v v0.1.0-beta.2 -d "$HOME/.local/bin"
+```
+
+### Windows (PowerShell)
+
+```powershell
+irm https://raw.githubusercontent.com/PapaDanielVi/cafebazaar_cli/master/scripts/install.ps1 | iex
+```
+
+To pin a version in PowerShell:
+
+```powershell
+$env:BAZAAR_VERSION = "v0.1.0-beta.2"
+irm https://raw.githubusercontent.com/PapaDanielVi/cafebazaar_cli/master/scripts/install.ps1 | iex
+```
+
+### Using Go
 
 ```bash
 go install github.com/PapaDanielVi/cafebazaar_cli/cmd/bazaar@latest
