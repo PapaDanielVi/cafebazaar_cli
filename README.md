@@ -72,7 +72,7 @@ curl -fsSL https://raw.githubusercontent.com/PapaDanielVi/cafebazaar_cli/master/
 Install a specific version or custom directory:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/PapaDanielVi/cafebazaar_cli/master/scripts/install.sh | bash -s -- -v v1.0.0 -d "$HOME/.local/bin"
+curl -fsSL https://raw.githubusercontent.com/PapaDanielVi/cafebazaar_cli/master/scripts/install.sh | bash -s -- -v v1.0.1 -d "$HOME/.local/bin"
 ```
 
 ### Windows (PowerShell)
@@ -84,7 +84,7 @@ irm https://raw.githubusercontent.com/PapaDanielVi/cafebazaar_cli/master/scripts
 To pin a version in PowerShell:
 
 ```powershell
-$env:BAZAAR_VERSION = "v1.0.0"
+$env:BAZAAR_VERSION = "v1.0.1"
 irm https://raw.githubusercontent.com/PapaDanielVi/cafebazaar_cli/master/scripts/install.ps1 | iex
 ```
 
@@ -97,7 +97,7 @@ Multi-arch images (`linux/amd64`, `linux/arm64`) are published to GHCR for CI/CD
 docker pull ghcr.io/papadanielvi/cafebazaar_cli:latest
 
 # Pinned version
-docker pull ghcr.io/papadanielvi/cafebazaar_cli:v1.0.0
+docker pull ghcr.io/papadanielvi/cafebazaar_cli:v1.0.1
 
 # Run against your local project directory
 docker run --rm \
