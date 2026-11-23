@@ -48,7 +48,20 @@
 
 ## Installation
 
-No Go toolchain is required for prebuilt binaries. Pick the one-liner for your platform below, or install via Go.
+No Go toolchain is required for prebuilt binaries. Pick the option for your platform below, or install via Go.
+
+### Homebrew (macOS and Linux)
+
+```bash
+brew tap PapaDanielVi/homebrew-tap
+brew install bazaar
+```
+
+Or install in a single command:
+
+```bash
+brew install PapaDanielVi/tap/bazaar
+```
 
 ### Linux, macOS, and Windows (Git Bash / WSL)
 

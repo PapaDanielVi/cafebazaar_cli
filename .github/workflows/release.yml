@@ -86,3 +86,85 @@ jobs:
             --title "bazaar ${TAG}" \
             --generate-notes \
             "${extra_flags[@]}"
+
+      - name: Update Homebrew Tap Cask
+        if: ${{ !contains(github.ref_name, '-') }}
+        env:
+          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$TAP_TOKEN" ]]; then
+            echo "HOMEBREW_TAP_TOKEN secret is not set; skipping automatic Homebrew tap update."
+            exit 0
+          fi
+
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
+          SHA_DARWIN_AMD64="$(awk '$2 == "bazaar_'"${VERSION}"'_darwin_amd64.tar.gz" { print $1 }' dist/checksums.txt)"
+          SHA_DARWIN_ARM64="$(awk '$2 == "bazaar_'"${VERSION}"'_darwin_arm64.tar.gz" { print $1 }' dist/checksums.txt)"
+          SHA_LINUX_AMD64="$(awk '$2 == "bazaar_'"${VERSION}"'_linux_amd64.tar.gz" { print $1 }' dist/checksums.txt)"
+          SHA_LINUX_ARM64="$(awk '$2 == "bazaar_'"${VERSION}"'_linux_arm64.tar.gz" { print $1 }' dist/checksums.txt)"
+
+          git clone "https://x-access-token:${TAP_TOKEN}@github.com/PapaDanielVi/homebrew-tap.git" /tmp/homebrew-tap
+          cat > /tmp/homebrew-tap/Casks/bazaar.rb <<EOF
+          # This file is auto-updated on stable releases of PapaDanielVi/cafebazaar_cli.
+          cask "bazaar" do
+            version "${VERSION}"
+
+            on_macos do
+              on_intel do
+                sha256 "${SHA_DARWIN_AMD64}"
+                url "https://github.com/PapaDanielVi/cafebazaar_cli/releases/download/v#{version}/bazaar_#{version}_darwin_amd64.tar.gz",
+                  verified: "github.com/PapaDanielVi/cafebazaar_cli"
+              end
+              on_arm do
+                sha256 "${SHA_DARWIN_ARM64}"
+                url "https://github.com/PapaDanielVi/cafebazaar_cli/releases/download/v#{version}/bazaar_#{version}_darwin_arm64.tar.gz",
+                  verified: "github.com/PapaDanielVi/cafebazaar_cli"
+              end
+            end
+
+            on_linux do
+              on_intel do
+                sha256 "${SHA_LINUX_AMD64}"
+                url "https://github.com/PapaDanielVi/cafebazaar_cli/releases/download/v#{version}/bazaar_#{version}_linux_amd64.tar.gz",
+                  verified: "github.com/PapaDanielVi/cafebazaar_cli"
+              end
+              on_arm do
+                sha256 "${SHA_LINUX_ARM64}"
+                url "https://github.com/PapaDanielVi/cafebazaar_cli/releases/download/v#{version}/bazaar_#{version}_linux_arm64.tar.gz",
+                  verified: "github.com/PapaDanielVi/cafebazaar_cli"
+              end
+            end
+
+            name "bazaar"
+            desc "CLI for CafeBazaar Android app publishing, Pishkhan releases, AAB/APK uploads, and user reviews"
+            homepage "https://github.com/PapaDanielVi/cafebazaar_cli"
+
+            livecheck do
+              skip "Auto-generated on release."
+            end
+
+            binary "bazaar"
+
+            postflight do
+              if OS.mac?
+                system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/bazaar"]
+              end
+            end
+
+            # No zap stanza required
+          end
+          EOF
+
+          # Remove leading indentation introduced by YAML block heredoc.
+          sed -i 's/^          //' /tmp/homebrew-tap/Casks/bazaar.rb
+
+          cd /tmp/homebrew-tap
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Casks/bazaar.rb
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: update bazaar cask to ${TAG}"
+            git push origin HEAD:main
+          fi
