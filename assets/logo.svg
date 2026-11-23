@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" fill="none">
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0B1324" />
+      <stop offset="100%" stop-color="#132238" />
+    </linearGradient>
+    <radialGradient id="glowGrad" cx="50%" cy="42%" r="52%">
+      <stop offset="0%" stop-color="#00B14F" stop-opacity="0.28" />
+      <stop offset="100%" stop-color="#00B14F" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="emeraldGrad" x1="120" y1="96" x2="392" y2="416" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#34D399" />
+      <stop offset="55%" stop-color="#00B14F" />
+      <stop offset="100%" stop-color="#059669" />
+    </linearGradient>
+    <linearGradient id="mintGrad" x1="160" y1="180" x2="360" y2="360" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#A7F3D0" />
+      <stop offset="100%" stop-color="#34D399" />
+    </linearGradient>
+    <linearGradient id="borderGrad" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#34D399" stop-opacity="0.45" />
+      <stop offset="50%" stop-color="#00B14F" stop-opacity="0.18" />
+      <stop offset="100%" stop-color="#34D399" stop-opacity="0.35" />
+    </linearGradient>
+  </defs>
+
+  <!-- Rounded app icon canvas -->
+  <rect x="16" y="16" width="480" height="480" rx="112" fill="url(#bgGrad)" stroke="url(#borderGrad)" stroke-width="4" />
+  <rect x="16" y="16" width="480" height="480" rx="112" fill="url(#glowGrad)" />
+
+  <!-- Minimalist geometric terminal window frame with Persian/bazaar pointed arch crest -->
+  <path
+    d="M256 90
+       C284 118 324 134 366 138
+       C382 140 394 153 394 170
+       V344
+       C394 377 367 404 334 404
+       H178
+       C145 404 118 377 118 344
+       V170
+       C118 153 130 140 146 138
+       C188 134 228 118 256 90 Z"
+    fill="#0F172A"
+    fill-opacity="0.72"
+    stroke="url(#emeraldGrad)"
+    stroke-width="14"
+    stroke-linejoin="round"
+  />
+
+  <!-- Top accent dot (package publish beacon) -->
+  <circle cx="256" cy="148" r="10" fill="#34D399" />
+
+  <!-- Terminal prompt chevron ">" -->
+  <path
+    d="M174 226 L236 274 L174 322"
+    stroke="url(#mintGrad)"
+    stroke-width="26"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+
+  <!-- Release upload arrow combined with prompt bar -->
+  <path
+    d="M312 316 V228"
+    stroke="url(#emeraldGrad)"
+    stroke-width="24"
+    stroke-linecap="round"
+  />
+  <path
+    d="M276 262 L312 224 L348 262"
+    stroke="url(#emeraldGrad)"
+    stroke-width="24"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+
+  <!-- Terminal cursor underscore bar -->
+  <rect x="268" y="334" width="88" height="20" rx="10" fill="#34D399" />
+</svg>
