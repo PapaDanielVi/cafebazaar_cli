@@ -6,6 +6,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/PapaDanielVi/cafebazaar_cli/internal/config"
 	"github.com/PapaDanielVi/cafebazaar_cli/internal/output"
@@ -150,5 +151,53 @@ func TestPrintCardWithPersianKeepsClosedBoxAndWraps(t *testing.T) {
 	}
 	if w := lipgloss.Width("\u200F\u200E"); w != 0 {
 		t.Fatalf("expected zero display width for RLM+LRM marks, got %d", w)
+	}
+}
+
+func TestFormatDurationAndUploadProgressETA(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	durTests := []struct {
+		name string
+		d    time.Duration
+		want string
+	}{
+		{name: "zero", d: 0, want: "0s"},
+		{name: "subsecond", d: 400 * time.Millisecond, want: "<1s"},
+		{name: "seconds", d: 18 * time.Second, want: "18s"},
+		{name: "minutes", d: 84 * time.Second, want: "1m 24s"},
+		{name: "hours", d: 3665 * time.Second, want: "1h 01m 05s"},
+	}
+	for _, tc := range durTests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := output.FormatDuration(ctx, tc.d); got != tc.want {
+				t.Fatalf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+
+	// Verify interactive upload progress renders percentage, ETA, and clean post-upload wait.
+	var outBuf, errBuf bytes.Buffer
+	p := output.NewPrinter(ctx, strings.NewReader(""), &outBuf, &errBuf, output.RuntimeMode{
+		Interactive: true,
+		Color:       false,
+		Format:      output.FormatTable,
+	})
+	onProg, finish := p.UploadProgress(ctx, "Uploading app.apk")
+	time.Sleep(60 * time.Millisecond)
+	onProg(ctx, 5*1024*1024, 10*1024*1024)
+	time.Sleep(90 * time.Millisecond)
+	onProg(ctx, 10*1024*1024, 10*1024*1024)
+	time.Sleep(100 * time.Millisecond)
+	finish(ctx)
+
+	got := errBuf.String()
+	if !strings.Contains(got, "50%") || !strings.Contains(got, "ETA") {
+		t.Fatalf("expected percentage and ETA in interactive upload progress, got %q", got)
+	}
+	if !strings.Contains(got, "100%") || !strings.Contains(got, "Waiting for CafeBazaar") {
+		t.Fatalf("expected 100%% and post-upload processing status, got %q", got)
 	}
 }

@@ -159,7 +159,7 @@ func (c *Client) WaitForBundle(
 	}
 }
 
-// CommitRelease submits the uncommitted release to CafeBazaar for review.
+// CommitRelease submits the uncommitted release to CafeBazaar for review with a 10-minute publish timeout.
 func (c *Client) CommitRelease(ctx context.Context, req CommitReleaseRequest) (ReleaseResponse, error) {
 	if req.StagedRolloutPercentage != 0 &&
 		(req.StagedRolloutPercentage < MinRolloutPercentage || req.StagedRolloutPercentage > MaxRolloutPercentage) {
@@ -167,7 +167,7 @@ func (c *Client) CommitRelease(ctx context.Context, req CommitReleaseRequest) (R
 	}
 
 	var resp ReleaseResponse
-	if _, err := c.http.DoJSON(ctx, http.MethodPost, EndpointCommit, nil, req, &resp); err != nil {
+	if _, err := c.http.DoJSONWithTimeout(ctx, httpclient.DefaultPublishTimeout, http.MethodPost, EndpointCommit, nil, req, &resp); err != nil {
 		return ReleaseResponse{}, fmt.Errorf("commit release: %w", err)
 	}
 	resp.Exists = resp.Type == ResponseTypeSuccess

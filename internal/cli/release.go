@@ -493,7 +493,7 @@ func runReleaseCommit(ctx context.Context, rt *AppRuntime, opts commitCmdOptions
 		return err
 	}
 	var resp pishkhan.ReleaseResponse
-	if err := rt.Printer.WithSpinner(ctx, "Submitting release to CafeBazaar review queue", func(spinCtx context.Context) error {
+	if err := rt.Printer.WithSpinner(ctx, "Submitting release to CafeBazaar (may take up to 10m)", func(spinCtx context.Context) error {
 		var callErr error
 		resp, callErr = client.CommitRelease(spinCtx, pishkhan.CommitReleaseRequest{
 			ChangelogEN:             en,

@@ -254,6 +254,9 @@ func TestClientValidationErrors(t *testing.T) {
 	if _, err := httpclient.New(ctx, httpclient.Config{BaseURL: "https://example.com", Token: testToken, ProxyURL: "ftp://bad-proxy:21"}); !errors.Is(err, httpclient.ErrInvalidProxyURL) {
 		t.Fatalf("got %v, want ErrInvalidProxyURL", err)
 	}
+	if httpclient.DefaultPublishTimeout != 10*time.Minute {
+		t.Fatalf("got DefaultPublishTimeout=%v, want 10m", httpclient.DefaultPublishTimeout)
+	}
 }
 
 func TestClientRoutesRequestsThroughHTTPProxy(t *testing.T) {

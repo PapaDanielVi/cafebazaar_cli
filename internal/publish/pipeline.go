@@ -303,14 +303,18 @@ func Run(ctx context.Context, opts Options) (Result, error) {
 		return res, err
 	}
 
-	commitResp, err := opts.PishkhanClient.CommitRelease(ctx, pishkhan.CommitReleaseRequest{
-		ChangelogEN:             opts.ChangelogEN,
-		ChangelogFA:             opts.ChangelogFA,
-		DeveloperNote:           opts.DeveloperNote,
-		StagedRolloutPercentage: rollout,
-		AutoPublish:             opts.AutoPublish,
-	})
-	if err != nil {
+	var commitResp pishkhan.ReleaseResponse
+	if err := opts.Printer.WithSpinner(ctx, "Submitting and publishing release on CafeBazaar (may take up to 10m)", func(spinCtx context.Context) error {
+		var callErr error
+		commitResp, callErr = opts.PishkhanClient.CommitRelease(spinCtx, pishkhan.CommitReleaseRequest{
+			ChangelogEN:             opts.ChangelogEN,
+			ChangelogFA:             opts.ChangelogFA,
+			DeveloperNote:           opts.DeveloperNote,
+			StagedRolloutPercentage: rollout,
+			AutoPublish:             opts.AutoPublish,
+		})
+		return callErr
+	}); err != nil {
 		return res, err
 	}
 	res.Committed = true

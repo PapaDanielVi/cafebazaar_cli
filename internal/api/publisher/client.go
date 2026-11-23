@@ -95,7 +95,7 @@ func (c *Client) CreateApp(ctx context.Context, req CreateAppRequest, onProgress
 		}
 		payload[FieldIssueAPIAgent] = req.IssueAPIAgent
 
-		if _, err := c.http.DoJSON(ctx, http.MethodPost, EndpointApps, nil, payload, &raw); err != nil {
+		if _, err := c.http.DoJSONWithTimeout(ctx, httpclient.DefaultPublishTimeout, http.MethodPost, EndpointApps, nil, payload, &raw); err != nil {
 			return CreateAppResponse{}, fmt.Errorf("create app via publisher api: %w", err)
 		}
 	}

@@ -19,13 +19,18 @@ import (
 )
 
 const (
-	defaultRequestTimeout = 30 * time.Second
-	defaultUploadTimeout  = 15 * time.Minute
-	defaultMaxRetries     = 3
-	defaultRetryWait      = 2 * time.Second
-	maxErrorBodyBytes     = 64 * 1024
-	httpSuccessMin        = 200
-	httpSuccessMax        = 299
+	// DefaultRequestTimeout is the default timeout for standard API metadata requests.
+	DefaultRequestTimeout = 2 * time.Minute
+	// DefaultPublishTimeout is the 10-minute timeout for release commit and app submission calls.
+	DefaultPublishTimeout = 10 * time.Minute
+	// DefaultUploadTimeout is the 15-minute timeout for package uploads and server-side APK inspection.
+	DefaultUploadTimeout = 15 * time.Minute
+
+	defaultMaxRetries = 3
+	defaultRetryWait  = 2 * time.Second
+	maxErrorBodyBytes = 64 * 1024
+	httpSuccessMin    = 200
+	httpSuccessMax    = 299
 )
 
 // Config configures a shared CafeBazaar API HTTP client.
@@ -79,11 +84,11 @@ func New(ctx context.Context, cfg Config) (*Client, error) {
 	}
 	timeout := cfg.Timeout
 	if timeout <= 0 {
-		timeout = defaultRequestTimeout
+		timeout = DefaultRequestTimeout
 	}
 	uploadTimeout := cfg.UploadTimeout
 	if uploadTimeout <= 0 {
-		uploadTimeout = defaultUploadTimeout
+		uploadTimeout = DefaultUploadTimeout
 	}
 	maxRetries := cfg.MaxRetries
 	if maxRetries < 0 {
@@ -119,8 +124,13 @@ func New(ctx context.Context, cfg Config) (*Client, error) {
 	}, nil
 }
 
-// DoJSON sends an authenticated JSON request and decodes the JSON response into out.
+// DoJSON sends an authenticated JSON request using the client's default timeout.
 func (c *Client) DoJSON(ctx context.Context, method, endpoint string, query url.Values, body any, out any) (int, error) {
+	return c.DoJSONWithTimeout(ctx, c.timeout, method, endpoint, query, body, out)
+}
+
+// DoJSONWithTimeout sends an authenticated JSON request bounded by timeout and decodes the response into out.
+func (c *Client) DoJSONWithTimeout(ctx context.Context, timeout time.Duration, method, endpoint string, query url.Values, body any, out any) (int, error) {
 	reqURL, err := c.buildURL(ctx, endpoint, query)
 	if err != nil {
 		return 0, err
@@ -137,7 +147,11 @@ func (c *Client) DoJSON(ctx context.Context, method, endpoint string, query url.
 		payload = bytes.TrimRight(buf.Bytes(), "\n")
 	}
 
-	reqCtx, cancel := context.WithTimeout(ctx, c.timeout)
+	effectiveTimeout := timeout
+	if effectiveTimeout <= 0 {
+		effectiveTimeout = c.timeout
+	}
+	reqCtx, cancel := context.WithTimeout(ctx, effectiveTimeout)
 	defer cancel()
 
 	return c.executeWithRetry(reqCtx, func(attemptCtx context.Context) (*http.Request, error) {
