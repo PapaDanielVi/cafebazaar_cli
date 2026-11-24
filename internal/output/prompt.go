@@ -16,7 +16,7 @@ type SelectOption struct {
 	Value string
 }
 
-// Select displays an interactive Huh picker and returns the chosen value.
+// Select displays an interactive scrollable picker with search/filter and returns the chosen value.
 func (p *Printer) Select(ctx context.Context, title, description string, options []SelectOption) (string, error) {
 	if !p.Mode.Interactive {
 		return "", ErrNonInteractive
@@ -30,27 +30,7 @@ func (p *Printer) Select(ctx context.Context, title, description string, options
 		return p.promptLineSelect(ctx, title, options)
 	}
 
-	huhOpts := make([]huh.Option[string], 0, len(options))
-	for _, opt := range options {
-		huhOpts = append(huhOpts, huh.NewOption(p.Text(ctx, opt.Label), opt.Value))
-	}
-
-	selected := options[0].Value
-	field := huh.NewSelect[string]().
-		Title(p.Text(ctx, title)).
-		Description(p.Text(ctx, description)).
-		Options(huhOpts...).
-		Value(&selected)
-
-	form := huh.NewForm(huh.NewGroup(field)).
-		WithTheme(HuhTheme(ctx)).
-		WithInput(p.In).
-		WithOutput(p.Err)
-
-	if err := form.RunWithContext(ctx); err != nil {
-		return "", fmt.Errorf("select %q: %w", title, err)
-	}
-	return selected, nil
+	return p.runInteractiveSelect(ctx, title, description, options)
 }
 
 // Input prompts for a single-line string value (masked when secret is true).
@@ -89,6 +69,11 @@ func (p *Printer) Input(ctx context.Context, title, description, placeholder, de
 func (p *Printer) MultilineInput(ctx context.Context, title, description, defaultValue string) (string, error) {
 	if !p.Mode.Interactive {
 		return "", ErrNonInteractive
+	}
+
+	// Use simple line reading when In is not a real TTY (for deterministic tests).
+	if !isTerminalReader(ctx, p.In) {
+		return p.promptLineInput(ctx, title, defaultValue)
 	}
 
 	value := defaultValue

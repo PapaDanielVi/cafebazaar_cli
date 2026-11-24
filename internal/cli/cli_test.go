@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"image"
+	"image/color"
+	"image/png"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -216,10 +219,41 @@ func TestInitNewAppCapturesReturnedAppToken(t *testing.T) {
 	cfgPath := filepath.Join(cfgDir, "config.yaml")
 	store := auth.NewFileStore(ctx, filepath.Join(cfgDir, "credentials.yaml"))
 
+	writePNG := func(path string, w, h int) string {
+		t.Helper()
+		img := image.NewRGBA(image.Rect(0, 0, w, h))
+		img.Set(0, 0, color.RGBA{R: 0, G: 177, B: 79, A: 255})
+		var buf bytes.Buffer
+		if err := png.Encode(&buf, img); err != nil {
+			t.Fatalf("encode png: %v", err)
+		}
+		if err := os.WriteFile(path, buf.Bytes(), 0o600); err != nil {
+			t.Fatalf("write png: %v", err)
+		}
+		return path
+	}
+	assetsDir := t.TempDir()
+	iconPath := writePNG(filepath.Join(assetsDir, "icon.png"), 512, 512)
+	shotsDir := filepath.Join(assetsDir, "shots")
+	if err := os.MkdirAll(shotsDir, 0o755); err != nil {
+		t.Fatalf("mkdir shots: %v", err)
+	}
+	writePNG(filepath.Join(shotsDir, "01.png"), 1080, 1920)
+	writePNG(filepath.Join(shotsDir, "02.png"), 1080, 1920)
+
+	var gotShotCount int
+	var gotNameFA string
 	pubSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == publisher.EndpointApps {
+			if err := r.ParseMultipartForm(4 << 20); err != nil {
+				t.Errorf("parse multipart: %v", err)
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			gotNameFA = r.FormValue(publisher.FieldNameFA)
+			gotShotCount = len(r.MultipartForm.File[publisher.FieldScreenshots])
 			w.WriteHeader(http.StatusCreated)
-			writeTestResponse(ctx, t, w, `{"type":"success","message":"App created.","package_name":"ir.demo.shop","api_agent_token":"issued-app-token-777"}`)
+			writeTestResponse(ctx, t, w, `{"type":"success","message":"New app successfully created and submitted for review.","package_name":"ir.demo.shop","version_code":1,"version_name":"1.0","app_url":"https://cafebazaar.ir/app/ir.demo.shop/","review_state":"in_review","auto_publish":true,"api_agent":{"token":"issued-app-token-777"},"warnings":[]}`)
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)
@@ -252,8 +286,24 @@ func TestInitNewAppCapturesReturnedAppToken(t *testing.T) {
 		return cmd.ExecuteContext(ctx)
 	}
 
-	if err := runCLI("init", "--mode", "new", "--package", "ir.demo.shop", "--yes", "--plain"); err != nil {
+	if err := runCLI(
+		"init",
+		"--mode", "new",
+		"--package", "ir.demo.shop",
+		"--category-id", "10",
+		"--name-fa", "فروشگاه نمونه",
+		"--name-en", "Demo Shop",
+		"--short-description-fa", "توضیح کوتاه فروشگاه",
+		"--description-fa", "توضیحات کامل اپلیکیشن فروشگاه نمونه",
+		"--email", "dev@example.com",
+		"--icon", iconPath,
+		"--screenshot", shotsDir,
+		"--yes", "--plain",
+	); err != nil {
 		t.Fatalf("bazaar init --mode new failed: %v", err)
+	}
+	if gotNameFA != "فروشگاه نمونه" || gotShotCount != 2 {
+		t.Fatalf("unexpected multipart submission: name_fa=%q shots=%d", gotNameFA, gotShotCount)
 	}
 
 	savedTok, _, err := store.Get(ctx, auth.AppKey(ctx, "ir.demo.shop"))
@@ -553,6 +603,54 @@ func TestSelectInitVariantListsAllVariants(t *testing.T) {
 				if !strings.Contains(promptOut, label) {
 					t.Fatalf("expected prompt to list %q, got:\n%s", label, promptOut)
 				}
+			}
+		})
+	}
+}
+
+func TestSelectCategoryID(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	tests := []struct {
+		name   string
+		stdin  string
+		wantID int
+	}{
+		{
+			name:   "selects official category by id value",
+			stdin:  "58\n",
+			wantID: 58,
+		},
+		{
+			name:   "selects first official category (Tools=11)",
+			stdin:  "1\n",
+			wantID: 11,
+		},
+		{
+			name:   "allows custom category id entry",
+			stdin:  "__custom_category__\n99\n",
+			wantID: 99,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			var outBuf, errBuf bytes.Buffer
+			printer := output.NewPrinter(ctx, strings.NewReader(tc.stdin), &outBuf, &errBuf, output.RuntimeMode{
+				Interactive: true,
+				Format:      output.FormatPlain,
+			})
+			gotID, err := cli.SelectCategoryID(ctx, printer)
+			if err != nil {
+				t.Fatalf("select category id: %v", err)
+			}
+			if gotID != tc.wantID {
+				t.Fatalf("got category id %d, want %d", gotID, tc.wantID)
+			}
+			if !strings.Contains(errBuf.String(), "Tools") || !strings.Contains(errBuf.String(), "Strategy") {
+				t.Fatalf("expected official categories in prompt output, got:\n%s", errBuf.String())
 			}
 		})
 	}

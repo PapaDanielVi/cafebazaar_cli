@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/PapaDanielVi/cafebazaar_cli/internal/android"
-	"github.com/PapaDanielVi/cafebazaar_cli/internal/api/publisher"
 	"github.com/PapaDanielVi/cafebazaar_cli/internal/auth"
 	"github.com/PapaDanielVi/cafebazaar_cli/internal/config"
 	"github.com/PapaDanielVi/cafebazaar_cli/internal/output"
@@ -94,30 +93,28 @@ func newAppUseCmd(ctx context.Context, rt *AppRuntime) *cobra.Command {
 
 func newAppCreateCmd(ctx context.Context, rt *AppRuntime) *cobra.Command {
 	var pkgFlag string
-	var artifactFlag string
 	var issueAgent bool
-	var extraFields []string
 	var authHeader string
 	var baseURL string
+	var newApp newAppFlags
 
 	cmd := &cobra.Command{
 		Use:   "create",
 		Short: "Create a new app via the Nasher Publisher API (POST /v1/apps/) and auto-save its app token",
 		RunE: func(c *cobra.Command, args []string) error {
 			_ = args
-			return runAppCreate(c.Context(), rt, pkgFlag, artifactFlag, issueAgent, extraFields, authHeader, baseURL)
+			newApp.AutoPublishSet = c.Flags().Changed(flagAutoPublish)
+			return runAppCreate(c.Context(), rt, pkgFlag, issueAgent, authHeader, baseURL, newApp)
 		},
 	}
 
 	cmd.Flags().StringVar(&pkgFlag, "package", "", "Android package name (auto-detected from Gradle if omitted)")
-	cmd.Flags().StringVar(&artifactFlag, "artifact", "", "Initial APK or AAB file path")
 	cmd.Flags().BoolVar(&issueAgent, "issue-api-agent", true, "Request CafeBazaar to issue and return a per-app Pishkhan token")
-	cmd.Flags().StringArrayVar(&extraFields, "field", nil, "Additional key=value field sent to POST /v1/apps/ (repeatable)")
 	cmd.Flags().StringVar(&authHeader, "auth-header", "", "Override Publisher API auth header name")
 	cmd.Flags().StringVar(&baseURL, "base-url", "", "Override Publisher API base URL")
+	registerNewAppFlags(ctx, cmd, rt, &newApp)
 
 	registerFlagCompletion(ctx, cmd, "package", completeAppPackages(rt))
-	registerFlagCompletion(ctx, cmd, "artifact", completeArtifactPaths(rt, android.ArtifactTypeAPK, "apk"))
 	return cmd
 }
 
@@ -125,15 +122,21 @@ func runAppCreate(
 	ctx context.Context,
 	rt *AppRuntime,
 	pkgFlag string,
-	artifactFlag string,
 	issueAgent bool,
-	extraFields []string,
 	authHeader string,
 	baseURL string,
+	newApp newAppFlags,
 ) error {
 	pubToken, _, err := rt.resolvePublisherToken(ctx)
 	if err != nil {
 		return err
+	}
+
+	var mod android.AppModule
+	if rt.Android != nil {
+		if m, ok := rt.Android.PrimaryModule(ctx, ""); ok {
+			mod = m
+		}
 	}
 
 	pkg := strings.TrimSpace(pkgFlag)
@@ -145,21 +148,11 @@ func runAppCreate(
 		pkg = chosenPkg
 	}
 
-	extra, err := parseKeyValueFlags(ctx, extraFields)
+	req, err := collectCreateAppRequest(ctx, rt, pkg, mod, issueAgent, newApp)
 	if err != nil {
 		return err
 	}
-
-	if _, err := rt.Printer.ConfirmDangerousAction(ctx, output.ConfirmRequest{
-		Title:     "Submit New App to CafeBazaar",
-		TargetApp: pkg,
-		Warning:   "Creates a new app under your developer account via POST /v1/apps/ and submits its first version for review.",
-		Details: []output.KeyValue{
-			{Key: labelArtifact, Value: fallbackDash(ctx, artifactFlag)},
-			{Key: "Issue App Token", Value: fmt.Sprintf("%v", issueAgent)},
-		},
-		PromptLabel: fmt.Sprintf("Create and submit new app %s?", pkg),
-	}); err != nil {
+	if err := confirmCreateAppRequest(ctx, rt, req); err != nil {
 		return err
 	}
 
@@ -168,12 +161,7 @@ func runAppCreate(
 		return err
 	}
 	onProg, finish := rt.Printer.UploadProgress(ctx, "Submitting new app")
-	resp, err := client.CreateApp(ctx, publisher.CreateAppRequest{
-		PackageName:   pkg,
-		IssueAPIAgent: issueAgent,
-		ArtifactPath:  artifactFlag,
-		ExtraFields:   extra,
-	}, onProg)
+	resp, err := client.CreateApp(ctx, req, onProg)
 	finish(ctx)
 	if err != nil {
 		return err
@@ -210,6 +198,18 @@ func runAppCreate(
 	items := []output.KeyValue{
 		{Key: labelPackageName, Value: fallbackDash(ctx, resp.PackageName)},
 		{Key: "Message", Value: fallbackDash(ctx, resp.Message)},
+	}
+	if resp.VersionName != "" || resp.VersionCode > 0 {
+		items = append(items, output.KeyValue{
+			Key:   labelVersion,
+			Value: fmt.Sprintf("%s (code %d)", fallbackDash(ctx, resp.VersionName), resp.VersionCode),
+		})
+	}
+	if resp.ReviewState != "" {
+		items = append(items, output.KeyValue{Key: "Review State", Value: resp.ReviewState})
+	}
+	if resp.AppURL != "" {
+		items = append(items, output.KeyValue{Key: "App URL", Value: resp.AppURL})
 	}
 	if resp.AppToken != "" {
 		items = append(items, output.KeyValue{

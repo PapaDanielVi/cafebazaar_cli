@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/PapaDanielVi/cafebazaar_cli/internal/android"
-	"github.com/PapaDanielVi/cafebazaar_cli/internal/api/publisher"
 	"github.com/PapaDanielVi/cafebazaar_cli/internal/auth"
 	"github.com/PapaDanielVi/cafebazaar_cli/internal/config"
 	"github.com/PapaDanielVi/cafebazaar_cli/internal/gitflow"
@@ -28,10 +27,9 @@ func newInitCmd(ctx context.Context, rt *AppRuntime) *cobra.Command {
 	var modeFlag string
 	var tokenFlag string
 	var tokenStdin bool
-	var artifactFlag string
 	var aliasFlag string
 	var skipVerify bool
-	var extraFields []string
+	var newApp newAppFlags
 
 	cmd := &cobra.Command{
 		Use:   "init",
@@ -39,16 +37,16 @@ func newInitCmd(ctx context.Context, rt *AppRuntime) *cobra.Command {
 		Long:  "Detects Gradle variants and package names, links an existing CafeBazaar app token (or submits a brand-new app via the Nasher token and captures its token), saves the secret in bazaar's background store, and writes .bazaar.yaml.",
 		RunE: func(c *cobra.Command, args []string) error {
 			_ = args
+			newApp.AutoPublishSet = c.Flags().Changed(flagAutoPublish)
 			return runInit(c.Context(), rt, initOptions{
 				PackageName: pkgFlag,
 				Variant:     variantFlag,
 				Mode:        modeFlag,
 				Token:       tokenFlag,
 				TokenStdin:  tokenStdin,
-				Artifact:    artifactFlag,
 				Alias:       aliasFlag,
 				SkipVerify:  skipVerify,
-				ExtraFields: extraFields,
+				NewApp:      newApp,
 			})
 		},
 	}
@@ -58,14 +56,12 @@ func newInitCmd(ctx context.Context, rt *AppRuntime) *cobra.Command {
 	cmd.Flags().StringVar(&modeFlag, "mode", "", "App onboarding mode: existing or new")
 	cmd.Flags().StringVar(&tokenFlag, "token", "", "App Pishkhan token for existing apps")
 	cmd.Flags().BoolVar(&tokenStdin, "token-stdin", false, "Read app Pishkhan token from stdin")
-	cmd.Flags().StringVar(&artifactFlag, "artifact", "", "Initial APK or AAB path when creating a new app")
 	cmd.Flags().StringVar(&aliasFlag, "alias", "", "Optional short alias for this app")
 	cmd.Flags().BoolVar(&skipVerify, "skip-verify", false, "Skip live Pishkhan token verification")
-	cmd.Flags().StringArrayVar(&extraFields, "field", nil, "Additional key=value field for Nasher POST /v1/apps/ (repeatable)")
+	registerNewAppFlags(ctx, cmd, rt, &newApp)
 
 	registerFlagCompletion(ctx, cmd, "package", completeAppPackages(rt))
 	registerFlagCompletion(ctx, cmd, "variant", completeGradleVariants(rt))
-	registerFlagCompletion(ctx, cmd, "artifact", completeArtifactPaths(rt, android.ArtifactTypeAPK, "apk"))
 	return cmd
 }
 
@@ -75,10 +71,9 @@ type initOptions struct {
 	Mode        string
 	Token       string
 	TokenStdin  bool
-	Artifact    string
 	Alias       string
 	SkipVerify  bool
-	ExtraFields []string
+	NewApp      newAppFlags
 }
 
 func runInit(ctx context.Context, rt *AppRuntime, opts initOptions) error {
@@ -287,38 +282,11 @@ func submitNewAppDuringInit(
 		return "", err
 	}
 
-	artifactPath := strings.TrimSpace(opts.Artifact)
-	if artifactPath == "" && len(mod.Artifacts) > 0 {
-		for _, a := range mod.Artifacts {
-			if a.Type == android.ArtifactTypeAPK || a.Type == android.ArtifactTypeAAB {
-				artifactPath = a.Path
-				break
-			}
-		}
-	}
-	if artifactPath == "" && rt.Printer.Mode.Interactive {
-		artifactPath, err = rt.Printer.Input(ctx, "Initial APK or AAB Path", "Path to the initial release package for CafeBazaar review (leave blank for metadata-only JSON).", "app/build/outputs/apk/release/app-release.apk", "", false)
-		if err != nil {
-			return "", err
-		}
-	}
-
-	extra, err := parseKeyValueFlags(ctx, opts.ExtraFields)
+	req, err := collectCreateAppRequest(ctx, rt, pkg, mod, true, opts.NewApp)
 	if err != nil {
 		return "", err
 	}
-
-	if _, err := rt.Printer.ConfirmDangerousAction(ctx, output.ConfirmRequest{
-		Title:     "Create New App via Nasher Publisher API",
-		TargetApp: pkg,
-		Warning:   "This creates a brand-new app on your CafeBazaar developer account and submits its first version for review.",
-		Details: []output.KeyValue{
-			{Key: "Endpoint", Value: "POST " + publisher.EndpointApps},
-			{Key: "Issue App Token", Value: "true (issue_api_agent)"},
-			{Key: labelArtifact, Value: fallbackDash(ctx, artifactPath)},
-		},
-		PromptLabel: fmt.Sprintf("Submit new app %s to CafeBazaar?", pkg),
-	}); err != nil {
+	if err := confirmCreateAppRequest(ctx, rt, req); err != nil {
 		return "", err
 	}
 
@@ -328,12 +296,7 @@ func submitNewAppDuringInit(
 	}
 
 	onProgress, finish := rt.Printer.UploadProgress(ctx, "Submitting new app")
-	resp, err := pubClient.CreateApp(ctx, publisher.CreateAppRequest{
-		PackageName:   pkg,
-		IssueAPIAgent: true,
-		ArtifactPath:  artifactPath,
-		ExtraFields:   extra,
-	}, onProgress)
+	resp, err := pubClient.CreateApp(ctx, req, onProgress)
 	finish(ctx)
 	if err != nil {
 		return "", err
@@ -342,6 +305,11 @@ func submitNewAppDuringInit(
 	for _, w := range resp.Warnings {
 		if wErr := rt.Printer.PrintWarning(ctx, w); wErr != nil {
 			return "", wErr
+		}
+	}
+	if resp.AppURL != "" {
+		if err := rt.Printer.PrintInfo(ctx, fmt.Sprintf("CafeBazaar listing URL: %s (review_state=%s)", resp.AppURL, fallbackDash(ctx, resp.ReviewState))); err != nil {
+			return "", err
 		}
 	}
 	return resp.AppToken, nil

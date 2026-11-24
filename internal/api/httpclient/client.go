@@ -186,7 +186,14 @@ func (c *Client) DoJSONWithTimeout(ctx context.Context, timeout time.Duration, m
 	}, out)
 }
 
-// DoMultipart streams a multipart/form-data file upload with optional progress callbacks.
+// MultipartFile describes a single file part in a multipart/form-data upload.
+type MultipartFile struct {
+	FieldName   string
+	FilePath    string
+	ContentType string
+}
+
+// DoMultipart streams a single-file multipart/form-data upload with optional progress callbacks.
 func (c *Client) DoMultipart(
 	ctx context.Context,
 	endpoint string,
@@ -200,22 +207,56 @@ func (c *Client) DoMultipart(
 	if strings.TrimSpace(filePath) == "" {
 		return 0, ErrEmptyFilePath
 	}
+	return c.DoMultipartFiles(ctx, endpoint, fields, []MultipartFile{
+		{
+			FieldName:   fileField,
+			FilePath:    filePath,
+			ContentType: fileContentType,
+		},
+	}, onProgress, out)
+}
+
+// DoMultipartFiles streams a multi-file multipart/form-data upload with aggregate progress callbacks.
+func (c *Client) DoMultipartFiles(
+	ctx context.Context,
+	endpoint string,
+	fields map[string]string,
+	files []MultipartFile,
+	onProgress ProgressFunc,
+	out any,
+) (int, error) {
+	if len(files) == 0 {
+		return 0, ErrEmptyFilePath
+	}
 
 	reqURL, err := c.buildURL(ctx, endpoint, nil)
 	if err != nil {
 		return 0, err
 	}
 
-	info, err := os.Stat(filePath)
-	if err != nil {
-		return 0, fmt.Errorf("stat upload file %q: %w", filePath, err)
-	}
-	if info.IsDir() {
-		return 0, fmt.Errorf("upload path %q is a directory", filePath)
-	}
-
-	if fileContentType == "" {
-		fileContentType = ContentTypeOctetStream
+	prepared := make([]MultipartFile, 0, len(files))
+	var totalBytes int64
+	for _, f := range files {
+		if strings.TrimSpace(f.FilePath) == "" {
+			return 0, ErrEmptyFilePath
+		}
+		info, statErr := os.Stat(f.FilePath)
+		if statErr != nil {
+			return 0, fmt.Errorf("stat upload file %q: %w", f.FilePath, statErr)
+		}
+		if info.IsDir() {
+			return 0, fmt.Errorf("upload path %q is a directory", f.FilePath)
+		}
+		ct := strings.TrimSpace(f.ContentType)
+		if ct == "" {
+			ct = ContentTypeOctetStream
+		}
+		prepared = append(prepared, MultipartFile{
+			FieldName:   f.FieldName,
+			FilePath:    f.FilePath,
+			ContentType: ct,
+		})
+		totalBytes += info.Size()
 	}
 
 	reqCtx, cancel := context.WithTimeout(ctx, c.uploadTimeout)
@@ -227,7 +268,7 @@ func (c *Client) DoMultipart(
 
 	errCh := make(chan error, 1)
 	go func() {
-		writeErr := writeMultipartBody(reqCtx, mw, fields, fileField, filePath, fileContentType, info.Size(), onProgress)
+		writeErr := writeMultipartBody(reqCtx, mw, fields, prepared, totalBytes, onProgress)
 		closeWriterErr := mw.Close()
 		finalErr := errors.Join(writeErr, closeWriterErr)
 		if closePipeErr := pw.CloseWithError(finalErr); closePipeErr != nil && finalErr == nil {
@@ -349,10 +390,8 @@ func writeMultipartBody(
 	ctx context.Context,
 	mw *multipart.Writer,
 	fields map[string]string,
-	fileField string,
-	filePath string,
-	fileContentType string,
-	fileSize int64,
+	files []MultipartFile,
+	totalBytes int64,
 	onProgress ProgressFunc,
 ) error {
 	for k, v := range fields {
@@ -361,31 +400,43 @@ func writeMultipartBody(
 		}
 	}
 
-	file, err := os.Open(filePath)
-	if err != nil {
-		return fmt.Errorf("open upload file %q: %w", filePath, err)
-	}
+	var uploadedBefore int64
+	for _, f := range files {
+		file, err := os.Open(f.FilePath)
+		if err != nil {
+			return fmt.Errorf("open upload file %q: %w", f.FilePath, err)
+		}
 
-	header := make(textproto.MIMEHeader)
-	escapedName := escapeMultipartQuotes(ctx, filepath.Base(filePath))
-	escapedField := escapeMultipartQuotes(ctx, fileField)
-	header.Set("Content-Disposition", fmt.Sprintf(`form-data; name="%s"; filename="%s"`, escapedField, escapedName))
-	header.Set(HeaderContentType, fileContentType)
+		header := make(textproto.MIMEHeader)
+		escapedName := escapeMultipartQuotes(ctx, filepath.Base(f.FilePath))
+		escapedField := escapeMultipartQuotes(ctx, f.FieldName)
+		header.Set("Content-Disposition", fmt.Sprintf(`form-data; name="%s"; filename="%s"`, escapedField, escapedName))
+		header.Set(HeaderContentType, f.ContentType)
 
-	part, err := mw.CreatePart(header)
-	if err != nil {
+		part, err := mw.CreatePart(header)
+		if err != nil {
+			closeErr := file.Close()
+			return fmt.Errorf("create multipart file part %q: %w", f.FieldName, errors.Join(err, closeErr))
+		}
+
+		baseOffset := uploadedBefore
+		var fileProgress ProgressFunc
+		if onProgress != nil {
+			fileProgress = func(pCtx context.Context, fileSent, _ int64) {
+				onProgress(pCtx, baseOffset+fileSent, totalBytes)
+			}
+		}
+
+		reader := newProgressReader(ctx, file, totalBytes, fileProgress)
+		written, copyErr := io.Copy(part, reader)
 		closeErr := file.Close()
-		return fmt.Errorf("create multipart file part %q: %w", fileField, errors.Join(err, closeErr))
-	}
-
-	reader := newProgressReader(ctx, file, fileSize, onProgress)
-	_, copyErr := io.Copy(part, reader)
-	closeErr := file.Close()
-	if copyErr != nil {
-		return fmt.Errorf("copy upload file %q: %w", filePath, errors.Join(copyErr, closeErr))
-	}
-	if closeErr != nil {
-		return fmt.Errorf("close upload file %q: %w", filePath, closeErr)
+		if copyErr != nil {
+			return fmt.Errorf("copy upload file %q: %w", f.FilePath, errors.Join(copyErr, closeErr))
+		}
+		if closeErr != nil {
+			return fmt.Errorf("close upload file %q: %w", f.FilePath, closeErr)
+		}
+		uploadedBefore += written
 	}
 	return nil
 }
