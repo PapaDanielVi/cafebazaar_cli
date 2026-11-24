@@ -34,6 +34,24 @@ const (
 	flagVerbose    = "verbose"
 	flagConfigPath = "config"
 	flagProxy      = "proxy"
+
+	cmdUseList   = "list"
+	cmdUseStatus = "status"
+
+	labelPackage     = "Package"
+	labelPackageName = "Package Name"
+	labelStatus      = "Status"
+	labelVersion     = "Version"
+	labelVariant     = "Variant"
+	labelArtifact    = "Artifact"
+	labelFile        = "File"
+	labelStorage     = "Storage"
+	labelNextStep    = "Next Step"
+
+	jsonKeyPackageName = "package_name"
+	jsonKeyBackend     = "backend"
+	//nolint:gosec // JSON output key name, not a credential.
+	jsonKeyToken = "token"
 )
 
 var (
@@ -235,7 +253,9 @@ func (r *AppRuntime) bootstrap(ctx context.Context) error {
 		primary := auth.NewKeyringStore(ctx, auth.ServiceName)
 		fallback := auth.NewFileStore(ctx, credPath)
 		r.Store = auth.NewFallbackStore(ctx, primary, fallback, r.Env.NoKeyring, func(cbCtx context.Context, reason error) {
-			_ = r.Printer.PrintWarning(cbCtx, fmt.Sprintf("OS keychain unavailable (%v); storing credentials in %s (0600)", reason, credPath))
+			if warnErr := r.Printer.PrintWarning(cbCtx, fmt.Sprintf("OS keychain unavailable (%v); storing credentials in %s (0600)", reason, credPath)); warnErr != nil {
+				return
+			}
 		})
 	}
 
@@ -288,9 +308,11 @@ func (r *AppRuntime) newPishkhanClient(ctx context.Context, token string) (*pish
 		}
 	}
 	return pishkhan.New(ctx, pishkhan.Config{
-		BaseURL:  r.Deps.PishkhanBaseURL,
-		Token:    token,
-		ProxyURL: proxyURL,
+		BaseURL:       r.Deps.PishkhanBaseURL,
+		Token:         token,
+		ClientAppName: httpclient.DefaultClientAppName,
+		CLIVersion:    Version,
+		ProxyURL:      proxyURL,
 	})
 }
 
@@ -302,9 +324,11 @@ func (r *AppRuntime) newCommentsClient(ctx context.Context, token string) (*comm
 		}
 	}
 	return comments.New(ctx, comments.Config{
-		BaseURL:  r.Deps.CommentsBaseURL,
-		Token:    token,
-		ProxyURL: proxyURL,
+		BaseURL:       r.Deps.CommentsBaseURL,
+		Token:         token,
+		ClientAppName: httpclient.DefaultClientAppName,
+		CLIVersion:    Version,
+		ProxyURL:      proxyURL,
 	})
 }
 
@@ -330,6 +354,8 @@ func (r *AppRuntime) newPublisherClient(ctx context.Context, token, headerOverri
 		BaseURL:        baseURL,
 		Token:          token,
 		AuthHeaderName: header,
+		ClientAppName:  httpclient.DefaultClientAppName,
+		CLIVersion:     Version,
 		ProxyURL:       proxyURL,
 	})
 }

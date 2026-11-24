@@ -61,7 +61,7 @@ func runAndroidInfo(ctx context.Context, rt *AppRuntime) error {
 		{Key: "Primary Module", Value: mod.Name},
 		{Key: "Build File", Value: relativeDisplayPath(ctx, rt.Android.RootDir, mod.BuildFile)},
 		{Key: "Base App ID", Value: mod.ApplicationID},
-		{Key: "Version", Value: fmt.Sprintf("%s (code %d)", mod.VersionName, mod.VersionCode)},
+		{Key: labelVersion, Value: fmt.Sprintf("%s (code %d)", mod.VersionName, mod.VersionCode)},
 		{Key: "Gradle Wrapper", Value: fmt.Sprintf("%v", rt.Android.HasWrapper)},
 		{Key: "Detected Variants", Value: fmt.Sprintf("%d", len(mod.Variants))},
 		{Key: "Detected Artifacts", Value: fmt.Sprintf("%d", len(mod.Artifacts))},
@@ -81,7 +81,7 @@ func runAndroidInfo(ctx context.Context, rt *AppRuntime) error {
 		for _, a := range mod.Artifacts {
 			rows = append(rows, []string{strings.ToUpper(a.Type), fallbackDash(ctx, a.VariantName), output.HumanBytes(ctx, a.SizeBytes), a.RelPath})
 		}
-		return rt.Printer.PrintTable(ctx, []string{"Type", "Variant", "Size", "Path"}, rows)
+		return rt.Printer.PrintTable(ctx, []string{"Type", labelVariant, "Size", "Path"}, rows)
 	}
 	return nil
 }
@@ -114,7 +114,7 @@ func printVariantsTable(ctx context.Context, rt *AppRuntime, variants []android.
 		}
 		rows = append(rows, []string{v.ModuleName, v.Name, v.BuildType, v.PackageName, v.VersionName, regBadge, v.AssembleTask})
 	}
-	return rt.Printer.PrintTable(ctx, []string{"Module", "Variant", "BuildType", "Package Name", "Version", "Auth", "Gradle Task"}, rows)
+	return rt.Printer.PrintTable(ctx, []string{"Module", labelVariant, "BuildType", labelPackageName, labelVersion, "Auth", "Gradle Task"}, rows)
 }
 
 func newAndroidBumpCmd(ctx context.Context, rt *AppRuntime) *cobra.Command {
@@ -145,7 +145,7 @@ func newAndroidBumpCmd(ctx context.Context, rt *AppRuntime) *cobra.Command {
 	cmd.Flags().BoolVar(&gitCommit, "git-commit", false, "Commit the updated Gradle build file to Git")
 	cmd.Flags().BoolVar(&gitTag, "git-tag", false, "Create an annotated Git tag for the new version")
 
-	_ = cmd.RegisterFlagCompletionFunc("bump", completeBumpFlag(ctx))
+	registerFlagCompletion(ctx, cmd, "bump", completeBumpFlag(ctx))
 	return cmd
 }
 

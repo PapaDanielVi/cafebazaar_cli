@@ -60,10 +60,9 @@ func newInitCmd(ctx context.Context, rt *AppRuntime) *cobra.Command {
 	cmd.Flags().BoolVar(&skipVerify, "skip-verify", false, "Skip live Pishkhan token verification")
 	cmd.Flags().StringArrayVar(&extraFields, "field", nil, "Additional key=value field for Nasher POST /v1/apps/ (repeatable)")
 
-	_ = cmd.RegisterFlagCompletionFunc("package", completeAppPackages(rt))
-	_ = cmd.RegisterFlagCompletionFunc("variant", completeGradleVariants(rt))
-	_ = cmd.RegisterFlagCompletionFunc("artifact", completeArtifactPaths(rt, android.ArtifactTypeAPK, "apk"))
-	_ = ctx
+	registerFlagCompletion(ctx, cmd, "package", completeAppPackages(rt))
+	registerFlagCompletion(ctx, cmd, "variant", completeGradleVariants(rt))
+	registerFlagCompletion(ctx, cmd, "artifact", completeArtifactPaths(rt, android.ArtifactTypeAPK, "apk"))
 	return cmd
 }
 
@@ -216,21 +215,21 @@ func runInit(ctx context.Context, rt *AppRuntime, opts initOptions) error {
 	}
 
 	result := map[string]any{
-		"package_name":   pkg,
-		"variant":        selectedVariant.Name,
-		"mode":           mode,
-		"token_source":   tokenSource,
-		"storage":        backend,
-		"token":          auth.MaskToken(ctx, token),
-		"project_config": cfgFilePath,
+		jsonKeyPackageName: pkg,
+		"variant":          selectedVariant.Name,
+		"mode":             mode,
+		"token_source":     tokenSource,
+		"storage":          backend,
+		jsonKeyToken:       auth.MaskToken(ctx, token),
+		"project_config":   cfgFilePath,
 	}
 	if printed, pErr := rt.Printer.PrintStructured(ctx, result); printed || pErr != nil {
 		return pErr
 	}
 
 	if err := rt.Printer.PrintCard(ctx, "CafeBazaar App Initialized", []output.KeyValue{
-		{Key: "Status", Value: rt.Printer.Theme.RenderBadge(ctx, "READY")},
-		{Key: "Package Name", Value: pkg},
+		{Key: labelStatus, Value: rt.Printer.Theme.RenderBadge(ctx, "READY")},
+		{Key: labelPackageName, Value: pkg},
 		{Key: "Default Variant", Value: fallbackDash(ctx, selectedVariant.Name)},
 		{Key: "Secret Token", Value: fmt.Sprintf("%s (%s)", auth.MaskToken(ctx, token), backend)},
 		{Key: "Project File", Value: cfgFilePath},
@@ -280,7 +279,7 @@ func submitNewAppDuringInit(
 		Details: []output.KeyValue{
 			{Key: "Endpoint", Value: "POST " + publisher.EndpointApps},
 			{Key: "Issue App Token", Value: "true (issue_api_agent)"},
-			{Key: "Artifact", Value: fallbackDash(ctx, artifactPath)},
+			{Key: labelArtifact, Value: fallbackDash(ctx, artifactPath)},
 		},
 		PromptLabel: fmt.Sprintf("Submit new app %s to CafeBazaar?", pkg),
 	}); err != nil {
@@ -339,7 +338,9 @@ func requireInitializedApp(ctx context.Context, rt *AppRuntime, variant string) 
 		return resolved, nil
 	}
 	if errors.Is(err, config.ErrAppNotInitialized) && rt.Printer.Mode.Interactive && rt.Android != nil {
-		_ = rt.Printer.PrintWarning(ctx, "This Android app folder is not initialized with a CafeBazaar app token yet.")
+		if warnErr := rt.Printer.PrintWarning(ctx, "This Android app folder is not initialized with a CafeBazaar app token yet."); warnErr != nil {
+			return config.ResolvedApp{}, warnErr
+		}
 		runNow, cErr := rt.Printer.Confirm(ctx, "Run `bazaar init` now?", "Initialize this folder and save its CafeBazaar token.", true)
 		if cErr == nil && runNow {
 			if initErr := runInit(ctx, rt, initOptions{Variant: variant}); initErr != nil {

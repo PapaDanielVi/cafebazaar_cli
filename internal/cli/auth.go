@@ -116,9 +116,9 @@ func runPublisherLogin(ctx context.Context, rt *AppRuntime, tokenFlag string, to
 	}
 
 	payload := map[string]any{
-		"account": account,
-		"backend": backend,
-		"token":   auth.MaskToken(ctx, token),
+		"account":      account,
+		jsonKeyBackend: backend,
+		jsonKeyToken:   auth.MaskToken(ctx, token),
 	}
 	if printed, err := rt.Printer.PrintStructured(ctx, payload); printed || err != nil {
 		return err
@@ -132,7 +132,7 @@ func runPublisherLogin(ctx context.Context, rt *AppRuntime, tokenFlag string, to
 func newPublisherStatusCmd(ctx context.Context, rt *AppRuntime) *cobra.Command {
 	_ = ctx
 	return &cobra.Command{
-		Use:   "status",
+		Use:   cmdUseStatus,
 		Short: "Check developer Nasher token status",
 		RunE: func(c *cobra.Command, args []string) error {
 			_ = args
@@ -144,23 +144,23 @@ func newPublisherStatusCmd(ctx context.Context, rt *AppRuntime) *cobra.Command {
 func runPublisherStatus(ctx context.Context, rt *AppRuntime) error {
 	tok, backend, err := rt.resolvePublisherToken(ctx)
 	status := map[string]any{
-		"configured": err == nil,
-		"backend":    backend,
-		"token":      auth.MaskToken(ctx, tok),
+		"configured":   err == nil,
+		jsonKeyBackend: backend,
+		jsonKeyToken:   auth.MaskToken(ctx, tok),
 	}
 	if printed, pErr := rt.Printer.PrintStructured(ctx, status); printed || pErr != nil {
 		return pErr
 	}
 	if err != nil {
 		return rt.Printer.PrintCard(ctx, "Nasher Developer Token", []output.KeyValue{
-			{Key: "Status", Value: rt.Printer.Theme.RenderBadge(ctx, "MISSING")},
-			{Key: "Next Step", Value: "Run `bazaar auth login` or set CAFEBAZAAR_PUBLISHER_TOKEN"},
+			{Key: labelStatus, Value: rt.Printer.Theme.RenderBadge(ctx, "MISSING")},
+			{Key: labelNextStep, Value: "Run `bazaar auth login` or set CAFEBAZAAR_PUBLISHER_TOKEN"},
 		})
 	}
 	return rt.Printer.PrintCard(ctx, "Nasher Developer Token", []output.KeyValue{
-		{Key: "Status", Value: rt.Printer.Theme.RenderBadge(ctx, "READY")},
+		{Key: labelStatus, Value: rt.Printer.Theme.RenderBadge(ctx, "READY")},
 		{Key: "Token", Value: auth.MaskToken(ctx, tok)},
-		{Key: "Storage", Value: backend},
+		{Key: labelStorage, Value: backend},
 	})
 }
 
@@ -307,10 +307,10 @@ func runAuthAppAdd(
 	}
 
 	payload := map[string]any{
-		"package_name": pkg,
-		"alias":        alias,
-		"backend":      backend,
-		"token":        auth.MaskToken(ctx, token),
+		jsonKeyPackageName: pkg,
+		"alias":            alias,
+		jsonKeyBackend:     backend,
+		jsonKeyToken:       auth.MaskToken(ctx, token),
 	}
 	if printed, pErr := rt.Printer.PrintStructured(ctx, payload); printed || pErr != nil {
 		return pErr
@@ -321,7 +321,7 @@ func runAuthAppAdd(
 func newAuthAppListCmd(ctx context.Context, rt *AppRuntime) *cobra.Command {
 	_ = ctx
 	return &cobra.Command{
-		Use:   "list",
+		Use:   cmdUseList,
 		Short: "List all apps with saved Pishkhan tokens",
 		RunE: func(c *cobra.Command, args []string) error {
 			_ = args
@@ -333,7 +333,7 @@ func newAuthAppListCmd(ctx context.Context, rt *AppRuntime) *cobra.Command {
 func newAuthAppStatusCmd(ctx context.Context, rt *AppRuntime) *cobra.Command {
 	_ = ctx
 	return &cobra.Command{
-		Use:   "status",
+		Use:   cmdUseStatus,
 		Short: "Verify the active app's Pishkhan token against CafeBazaar",
 		RunE: func(c *cobra.Command, args []string) error {
 			_ = args
@@ -365,22 +365,22 @@ func runAuthAppStatus(ctx context.Context, rt *AppRuntime) error {
 	}
 
 	data := map[string]any{
-		"package_name":  resolved.PackageName,
-		"resolved_by":   resolved.ResolvedBy,
-		"token_source":  resolved.TokenSource,
-		"token":         auth.MaskToken(ctx, resolved.Token),
-		"valid":         true,
-		"has_published": pubRespExists,
+		jsonKeyPackageName: resolved.PackageName,
+		"resolved_by":      resolved.ResolvedBy,
+		"token_source":     resolved.TokenSource,
+		jsonKeyToken:       auth.MaskToken(ctx, resolved.Token),
+		"valid":            true,
+		"has_published":    pubRespExists,
 	}
 	if printed, pErr := rt.Printer.PrintStructured(ctx, data); printed || pErr != nil {
 		return pErr
 	}
 	return rt.Printer.PrintCard(ctx, "App Token Status", []output.KeyValue{
-		{Key: "Status", Value: rt.Printer.Theme.RenderBadge(ctx, "CONNECTED")},
-		{Key: "Package", Value: resolved.PackageName},
+		{Key: labelStatus, Value: rt.Printer.Theme.RenderBadge(ctx, "CONNECTED")},
+		{Key: labelPackage, Value: resolved.PackageName},
 		{Key: "Resolved By", Value: resolved.ResolvedBy},
 		{Key: "Token", Value: auth.MaskToken(ctx, resolved.Token)},
-		{Key: "Storage", Value: resolved.TokenSource},
+		{Key: labelStorage, Value: resolved.TokenSource},
 	})
 }
 
@@ -428,7 +428,7 @@ func runAuthAppRemove(ctx context.Context, rt *AppRuntime, pkgOrAlias string) er
 func newAuthStatusCmd(ctx context.Context, rt *AppRuntime) *cobra.Command {
 	_ = ctx
 	return &cobra.Command{
-		Use:   "status",
+		Use:   cmdUseStatus,
 		Short: "Show Nasher developer token, registered apps, and current folder resolution",
 		RunE: func(c *cobra.Command, args []string) error {
 			_ = args
@@ -444,15 +444,15 @@ func runAuthOverview(ctx context.Context, rt *AppRuntime) error {
 
 	overview := map[string]any{
 		"publisher": map[string]any{
-			"configured": pubErr == nil,
-			"backend":    pubBackend,
-			"token":      auth.MaskToken(ctx, pubTok),
+			"configured":   pubErr == nil,
+			jsonKeyBackend: pubBackend,
+			jsonKeyToken:   auth.MaskToken(ctx, pubTok),
 		},
 		"active_folder_app": map[string]any{
-			"resolved":     activeErr == nil,
-			"package_name": activeApp.PackageName,
-			"resolved_by":  activeApp.ResolvedBy,
-			"storage":      activeApp.TokenSource,
+			"resolved":         activeErr == nil,
+			jsonKeyPackageName: activeApp.PackageName,
+			"resolved_by":      activeApp.ResolvedBy,
+			"storage":          activeApp.TokenSource,
 		},
 		"registered_apps": apps,
 	}
@@ -487,7 +487,7 @@ func runAuthOverview(ctx context.Context, rt *AppRuntime) error {
 			}
 			rows = append(rows, []string{marker, a.PackageName, a.Alias, a.TokenSource, a.Backend, joinShortPaths(ctx, a.Paths)})
 		}
-		return rt.Printer.PrintTable(ctx, []string{"Def", "Package Name", "Alias", "Origin", "Storage", "Bound Folders"}, rows)
+		return rt.Printer.PrintTable(ctx, []string{"Def", labelPackageName, "Alias", "Origin", labelStorage, "Bound Folders"}, rows)
 	}
 	return nil
 }

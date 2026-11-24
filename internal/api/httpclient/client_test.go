@@ -21,6 +21,7 @@ const (
 	testEndpoint   = "/v1/test/"
 	testUploadPath = "/v1/upload/"
 	testPersianMsg = "چیزهای باحال جدید اضافه شد"
+	testCLIVersion = "v1.0.4"
 )
 
 func TestClientDoJSONAndErrors(t *testing.T) {
@@ -70,8 +71,12 @@ func TestClientDoJSONAndErrors(t *testing.T) {
 
 			var receivedBody string
 			var receivedHeader string
+			var receivedAppName string
+			var receivedVersion string
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				receivedHeader = r.Header.Get(httpclient.HeaderPishkhanSecret)
+				receivedAppName = r.Header.Get(httpclient.HeaderAppName)
+				receivedVersion = r.Header.Get(httpclient.HeaderVersion)
 				data, err := io.ReadAll(r.Body)
 				if err != nil {
 					t.Errorf("read request body: %v", err)
@@ -87,6 +92,7 @@ func TestClientDoJSONAndErrors(t *testing.T) {
 			client, err := httpclient.New(ctx, httpclient.Config{
 				BaseURL:    srv.URL,
 				Token:      testToken,
+				CLIVersion: testCLIVersion,
 				MaxRetries: 1,
 				RetryWait:  time.Millisecond,
 			})
@@ -98,6 +104,12 @@ func TestClientDoJSONAndErrors(t *testing.T) {
 			_, err = client.DoJSON(ctx, http.MethodPost, testEndpoint, nil, map[string]string{"note": testPersianMsg}, &out)
 			if receivedHeader != testToken {
 				t.Fatalf("got auth header %q, want %q", receivedHeader, testToken)
+			}
+			if receivedAppName != httpclient.DefaultClientAppName {
+				t.Fatalf("got app_name header %q, want %q", receivedAppName, httpclient.DefaultClientAppName)
+			}
+			if receivedVersion != testCLIVersion {
+				t.Fatalf("got version header %q, want %q", receivedVersion, testCLIVersion)
 			}
 			if !tc.wantErr && err != nil {
 				t.Fatalf("unexpected error: %v", err)
@@ -136,11 +148,15 @@ func TestClientRetriesRateLimit(t *testing.T) {
 		n := calls.Add(1)
 		if n < 3 {
 			w.WriteHeader(http.StatusTooManyRequests)
-			_, _ = w.Write([]byte(`{"type":"too_many_requests","message":"Too many requests"}`))
+			if _, err := w.Write([]byte(`{"type":"too_many_requests","message":"Too many requests"}`)); err != nil {
+				t.Errorf("write 429 response: %v", err)
+			}
 			return
 		}
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"ok":true}`))
+		if _, err := w.Write([]byte(`{"ok":true}`)); err != nil {
+			t.Errorf("write ok response: %v", err)
+		}
 	}))
 	defer srv.Close()
 
@@ -178,7 +194,11 @@ func TestClientDoMultipartWithProgress(t *testing.T) {
 
 	var gotArch string
 	var gotFileBytes []byte
+	var gotAppName string
+	var gotVersion string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAppName = r.Header.Get(httpclient.HeaderAppName)
+		gotVersion = r.Header.Get(httpclient.HeaderVersion)
 		if err := r.ParseMultipartForm(1 << 20); err != nil {
 			t.Errorf("parse multipart: %v", err)
 			return
@@ -190,7 +210,9 @@ func TestClientDoMultipartWithProgress(t *testing.T) {
 			return
 		}
 		defer func() {
-			_ = file.Close()
+			if closeErr := file.Close(); closeErr != nil {
+				t.Errorf("close apk form file: %v", closeErr)
+			}
 		}()
 		gotFileBytes, err = io.ReadAll(file)
 		if err != nil {
@@ -198,13 +220,16 @@ func TestClientDoMultipartWithProgress(t *testing.T) {
 			return
 		}
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"type":"success"}`))
+		if _, err := w.Write([]byte(`{"type":"success"}`)); err != nil {
+			t.Errorf("write multipart response: %v", err)
+		}
 	}))
 	defer srv.Close()
 
 	client, err := httpclient.New(ctx, httpclient.Config{
-		BaseURL: srv.URL,
-		Token:   testToken,
+		BaseURL:    srv.URL,
+		Token:      testToken,
+		CLIVersion: testCLIVersion,
 	})
 	if err != nil {
 		t.Fatalf("new client: %v", err)
@@ -232,6 +257,12 @@ func TestClientDoMultipartWithProgress(t *testing.T) {
 	}
 	if gotArch != "all" {
 		t.Fatalf("got architecture %q, want all", gotArch)
+	}
+	if gotAppName != httpclient.DefaultClientAppName {
+		t.Fatalf("got app_name header %q, want %q", gotAppName, httpclient.DefaultClientAppName)
+	}
+	if gotVersion != testCLIVersion {
+		t.Fatalf("got version header %q, want %q", gotVersion, testCLIVersion)
 	}
 	if string(gotFileBytes) != string(payload) {
 		t.Fatalf("got file %q, want %q", string(gotFileBytes), string(payload))
@@ -267,7 +298,9 @@ func TestClientRoutesRequestsThroughHTTPProxy(t *testing.T) {
 	proxySrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		proxiedRequestURL = r.URL.String()
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"proxied":true}`))
+		if _, err := w.Write([]byte(`{"proxied":true}`)); err != nil {
+			t.Errorf("write proxied response: %v", err)
+		}
 	}))
 	defer proxySrv.Close()
 

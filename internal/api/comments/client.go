@@ -21,12 +21,14 @@ type Client struct {
 
 // Config configures a Comments API client.
 type Config struct {
-	BaseURL    string
-	Token      string
-	ProxyURL   string
-	HTTPClient *http.Client
-	MaxRetries int
-	RetryWait  time.Duration
+	BaseURL       string
+	Token         string
+	ClientAppName string
+	CLIVersion    string
+	ProxyURL      string
+	HTTPClient    *http.Client
+	MaxRetries    int
+	RetryWait     time.Duration
 }
 
 // New creates a new Comments API client.
@@ -39,6 +41,8 @@ func New(ctx context.Context, cfg Config) (*Client, error) {
 		BaseURL:        baseURL,
 		Token:          cfg.Token,
 		AuthHeaderName: httpclient.HeaderPishkhanSecret,
+		ClientAppName:  cfg.ClientAppName,
+		CLIVersion:     cfg.CLIVersion,
 		ProxyURL:       cfg.ProxyURL,
 		HTTPClient:     cfg.HTTPClient,
 		MaxRetries:     cfg.MaxRetries,

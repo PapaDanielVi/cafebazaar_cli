@@ -17,6 +17,14 @@ import (
 	"github.com/PapaDanielVi/cafebazaar_cli/internal/publish"
 )
 
+func writeTestResponse(ctx context.Context, t *testing.T, w http.ResponseWriter, body string) {
+	_ = ctx
+	t.Helper()
+	if _, err := w.Write([]byte(body)); err != nil {
+		t.Errorf("write test response: %v", err)
+	}
+}
+
 func TestPipelineDryRunAndLiveAPKFlow(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -52,23 +60,23 @@ android {
 		switch {
 		case r.Method == http.MethodGet && r.URL.Path == pishkhan.EndpointLastPublished:
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"type":"success","release":{"packages":[{"version_code":8,"version_name":"1.2.0"}]}}`))
+			writeTestResponse(ctx, t, w, `{"type":"success","release":{"packages":[{"version_code":8,"version_name":"1.2.0"}]}}`)
 		case r.Method == http.MethodGet && r.URL.Path == pishkhan.EndpointLastCommitted:
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"type":"not-exists"}`))
+			writeTestResponse(ctx, t, w, `{"type":"not-exists"}`)
 		case r.Method == http.MethodGet && r.URL.Path == pishkhan.EndpointLastUncommitted:
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"type":"not-exists"}`))
+			writeTestResponse(ctx, t, w, `{"type":"not-exists"}`)
 		case r.Method == http.MethodPost && r.URL.Path == pishkhan.EndpointReleases:
 			w.WriteHeader(http.StatusCreated)
-			_, _ = w.Write([]byte(`{"type":"success","release":{"packages":[]}}`))
+			writeTestResponse(ctx, t, w, `{"type":"success","release":{"packages":[]}}`)
 		case r.Method == http.MethodPost && r.URL.Path == pishkhan.EndpointUploadAPK:
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"type":"success","package":{"version_code":9,"version_name":"1.2.1"}}`))
+			writeTestResponse(ctx, t, w, `{"type":"success","package":{"version_code":9,"version_name":"1.2.1"}}`)
 		case r.Method == http.MethodPost && r.URL.Path == pishkhan.EndpointCommit:
 			committed = true
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"type":"success","release":{"id":99,"committed":true,"staged_rollout_percentage":100}}`))
+			writeTestResponse(ctx, t, w, `{"type":"success","release":{"id":99,"committed":true,"staged_rollout_percentage":100}}`)
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}

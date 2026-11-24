@@ -43,7 +43,7 @@ func DiscoverArtifacts(ctx context.Context, mod AppModule) []Artifact {
 	var found []Artifact
 	walkErr := filepath.WalkDir(outputsDir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d == nil || d.IsDir() {
-			return nil
+			return nil //nolint:nilerr // Skip unreadable build output entries during discovery.
 		}
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -63,7 +63,7 @@ func DiscoverArtifacts(ctx context.Context, mod AppModule) []Artifact {
 
 		info, statErr := d.Info()
 		if statErr != nil {
-			return nil
+			return nil //nolint:nilerr // Skip files whose metadata cannot be read.
 		}
 		rel, relErr := filepath.Rel(mod.Dir, path)
 		if relErr != nil {

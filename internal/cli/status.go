@@ -13,10 +13,9 @@ import (
 )
 
 func newStatusCmd(ctx context.Context, rt *AppRuntime) *cobra.Command {
-	_ = ctx
 	var variant string
 	cmd := &cobra.Command{
-		Use:   "status",
+		Use:   cmdUseStatus,
 		Short: "Show combined local Android project info and live CafeBazaar release status",
 		RunE: func(c *cobra.Command, args []string) error {
 			_ = args
@@ -24,19 +23,19 @@ func newStatusCmd(ctx context.Context, rt *AppRuntime) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&variant, "variant", "", "Gradle build variant to inspect")
-	_ = cmd.RegisterFlagCompletionFunc("variant", completeGradleVariants(rt))
+	registerFlagCompletion(ctx, cmd, "variant", completeGradleVariants(rt))
 	return cmd
 }
 
 type statusSummary struct {
-	PackageName   string                    `json:"package_name" yaml:"package_name"`
-	ResolvedBy    string                    `json:"resolved_by" yaml:"resolved_by"`
-	LocalModule   *android.AppModule        `json:"local_module,omitempty" yaml:"local_module,omitempty"`
-	Git           *gitflow.RepoInfo         `json:"git,omitempty" yaml:"git,omitempty"`
-	Published     pishkhan.ReleaseResponse  `json:"published" yaml:"published"`
-	Committed     pishkhan.ReleaseResponse  `json:"committed" yaml:"committed"`
-	Uncommitted   pishkhan.ReleaseResponse  `json:"uncommitted" yaml:"uncommitted"`
-	Bundle        *pishkhan.BundleInfo      `json:"bundle,omitempty" yaml:"bundle,omitempty"`
+	PackageName string                   `json:"package_name" yaml:"package_name"`
+	ResolvedBy  string                   `json:"resolved_by" yaml:"resolved_by"`
+	LocalModule *android.AppModule       `json:"local_module,omitempty" yaml:"local_module,omitempty"`
+	Git         *gitflow.RepoInfo        `json:"git,omitempty" yaml:"git,omitempty"`
+	Published   pishkhan.ReleaseResponse `json:"published" yaml:"published"`
+	Committed   pishkhan.ReleaseResponse `json:"committed" yaml:"committed"`
+	Uncommitted pishkhan.ReleaseResponse `json:"uncommitted" yaml:"uncommitted"`
+	Bundle      *pishkhan.BundleInfo     `json:"bundle,omitempty" yaml:"bundle,omitempty"`
 }
 
 func runUnifiedStatus(ctx context.Context, rt *AppRuntime, variant string) error {
@@ -90,7 +89,7 @@ func runUnifiedStatus(ctx context.Context, rt *AppRuntime, variant string) error
 	}
 
 	items := []output.KeyValue{
-		{Key: "Package Name", Value: fallbackDash(ctx, summary.PackageName)},
+		{Key: labelPackageName, Value: fallbackDash(ctx, summary.PackageName)},
 		{Key: "Resolved By", Value: summary.ResolvedBy},
 	}
 	if summary.LocalModule != nil {

@@ -39,6 +39,8 @@ type Config struct {
 	Token          string
 	AuthHeaderName string
 	UserAgent      string
+	ClientAppName  string
+	CLIVersion     string
 	ProxyURL       string
 	Timeout        time.Duration
 	UploadTimeout  time.Duration
@@ -53,6 +55,8 @@ type Client struct {
 	token          string
 	authHeaderName string
 	userAgent      string
+	clientAppName  string
+	cliVersion     string
 	timeout        time.Duration
 	uploadTimeout  time.Duration
 	maxRetries     int
@@ -78,9 +82,21 @@ func New(ctx context.Context, cfg Config) (*Client, error) {
 	if authHeader == "" {
 		authHeader = HeaderPishkhanSecret
 	}
+	clientAppName := strings.TrimSpace(cfg.ClientAppName)
+	if clientAppName == "" {
+		clientAppName = DefaultClientAppName
+	}
+	cliVersion := strings.TrimSpace(cfg.CLIVersion)
+	if cliVersion == "" {
+		cliVersion = DefaultCLIVersion
+	}
 	userAgent := strings.TrimSpace(cfg.UserAgent)
 	if userAgent == "" {
-		userAgent = DefaultUserAgent
+		if strings.TrimSpace(cfg.CLIVersion) != "" {
+			userAgent = "bazaar-cli/" + cliVersion
+		} else {
+			userAgent = DefaultUserAgent
+		}
 	}
 	timeout := cfg.Timeout
 	if timeout <= 0 {
@@ -116,6 +132,8 @@ func New(ctx context.Context, cfg Config) (*Client, error) {
 		token:          token,
 		authHeaderName: authHeader,
 		userAgent:      userAgent,
+		clientAppName:  clientAppName,
+		cliVersion:     cliVersion,
 		timeout:        timeout,
 		uploadTimeout:  uploadTimeout,
 		maxRetries:     maxRetries,
@@ -163,9 +181,7 @@ func (c *Client) DoJSONWithTimeout(ctx context.Context, timeout time.Duration, m
 		if err != nil {
 			return nil, fmt.Errorf("build http request: %w", err)
 		}
-		req.Header.Set(c.authHeaderName, c.token)
-		req.Header.Set(HeaderUserAgent, c.userAgent)
-		req.Header.Set(HeaderContentType, ContentTypeJSON)
+		c.setDefaultHeaders(attemptCtx, req, ContentTypeJSON)
 		return req, nil
 	}, out)
 }
@@ -222,13 +238,11 @@ func (c *Client) DoMultipart(
 
 	req, err := http.NewRequestWithContext(reqCtx, http.MethodPost, reqURL, pr)
 	if err != nil {
-		_ = pr.Close()
-		<-errCh
-		return 0, fmt.Errorf("build multipart request: %w", err)
+		closeErr := pr.Close()
+		pipeErr := <-errCh
+		return 0, fmt.Errorf("build multipart request: %w", errors.Join(err, closeErr, pipeErr))
 	}
-	req.Header.Set(c.authHeaderName, c.token)
-	req.Header.Set(HeaderUserAgent, c.userAgent)
-	req.Header.Set(HeaderContentType, multipartContentType)
+	c.setDefaultHeaders(reqCtx, req, multipartContentType)
 
 	resp, doErr := c.httpClient.Do(req)
 	pipeErr := <-errCh
@@ -244,6 +258,15 @@ func (c *Client) DoMultipart(
 		return status, fmt.Errorf("stream multipart body: %w", pipeErr)
 	}
 	return status, decodeErr
+}
+
+func (c *Client) setDefaultHeaders(ctx context.Context, req *http.Request, contentType string) {
+	_ = ctx
+	req.Header.Set(c.authHeaderName, c.token)
+	req.Header.Set(HeaderUserAgent, c.userAgent)
+	req.Header.Set(HeaderAppName, c.clientAppName)
+	req.Header.Set(HeaderVersion, c.cliVersion)
+	req.Header.Set(HeaderContentType, contentType)
 }
 
 func (c *Client) executeWithRetry(
@@ -342,9 +365,6 @@ func writeMultipartBody(
 	if err != nil {
 		return fmt.Errorf("open upload file %q: %w", filePath, err)
 	}
-	defer func() {
-		_ = file.Close()
-	}()
 
 	header := make(textproto.MIMEHeader)
 	escapedName := escapeMultipartQuotes(ctx, filepath.Base(filePath))
@@ -354,12 +374,18 @@ func writeMultipartBody(
 
 	part, err := mw.CreatePart(header)
 	if err != nil {
-		return fmt.Errorf("create multipart file part %q: %w", fileField, err)
+		closeErr := file.Close()
+		return fmt.Errorf("create multipart file part %q: %w", fileField, errors.Join(err, closeErr))
 	}
 
 	reader := newProgressReader(ctx, file, fileSize, onProgress)
-	if _, err := io.Copy(part, reader); err != nil {
-		return fmt.Errorf("copy upload file %q: %w", filePath, err)
+	_, copyErr := io.Copy(part, reader)
+	closeErr := file.Close()
+	if copyErr != nil {
+		return fmt.Errorf("copy upload file %q: %w", filePath, errors.Join(copyErr, closeErr))
+	}
+	if closeErr != nil {
+		return fmt.Errorf("close upload file %q: %w", filePath, closeErr)
 	}
 	return nil
 }

@@ -25,9 +25,9 @@ func TestConfirmDangerousActionBehavior(t *testing.T) {
 		wantDetails bool
 	}{
 		{
-			name:   "non-interactive refuses without yes",
-			mode:   output.RuntimeMode{Interactive: false, Yes: false, Format: output.FormatPlain},
-			wantOK: false,
+			name:    "non-interactive refuses without yes",
+			mode:    output.RuntimeMode{Interactive: false, Yes: false, Format: output.FormatPlain},
+			wantOK:  false,
 			wantErr: output.ErrConfirmationRequired,
 		},
 		{

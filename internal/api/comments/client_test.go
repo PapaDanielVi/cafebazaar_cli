@@ -27,13 +27,17 @@ func TestCommentsListFiltersAndPagination(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get(comments.QueryCursor) == "page2" {
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"next":null,"previous":"prev","results":[{"id":2,"rate":5,"text":"عالی بود"}]}`))
+			if _, err := w.Write([]byte(`{"next":null,"previous":"prev","results":[{"id":2,"rate":5,"text":"عالی بود"}]}`)); err != nil {
+				t.Errorf("write page2 reviews response: %v", err)
+			}
 			return
 		}
 		gotQuery = r.URL.RawQuery
 		nextURL := fmt.Sprintf("%s%s?cursor=page2", srvURL, comments.EndpointReviews)
 		w.WriteHeader(http.StatusOK)
-		_, _ = fmt.Fprintf(w, `{"next":%q,"previous":null,"results":[{"id":1,"rate":4,"text":"اپ خوبیه"}]}`, nextURL)
+		if _, err := fmt.Fprintf(w, `{"next":%q,"previous":null,"results":[{"id":1,"rate":4,"text":"اپ خوبیه"}]}`, nextURL); err != nil {
+			t.Errorf("write reviews response: %v", err)
+		}
 	}))
 	defer srv.Close()
 	srvURL = srv.URL
@@ -81,7 +85,9 @@ func TestCommentsReplyReview(t *testing.T) {
 			t.Errorf("decode reply body: %v", err)
 		}
 		w.WriteHeader(http.StatusCreated)
-		_, _ = fmt.Fprintf(w, `{"text":%q,"email":%q}`, gotReq.Text, gotReq.Email)
+		if _, err := fmt.Fprintf(w, `{"text":%q,"email":%q}`, gotReq.Text, gotReq.Email); err != nil {
+			t.Errorf("write reply response: %v", err)
+		}
 	}))
 	defer srv.Close()
 

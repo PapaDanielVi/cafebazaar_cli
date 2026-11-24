@@ -26,7 +26,7 @@ func newVersionCmd(ctx context.Context, rt *AppRuntime) *cobra.Command {
 				return err
 			}
 			return rt.Printer.PrintCard(c.Context(), "bazaar CLI", []output.KeyValue{
-				{Key: "Version", Value: Version},
+				{Key: labelVersion, Value: Version},
 				{Key: "Commit", Value: Commit},
 				{Key: "Built", Value: BuildDate},
 				{Key: "Runtime", Value: runtime.Version() + " (" + runtime.GOOS + "/" + runtime.GOARCH + ")"},

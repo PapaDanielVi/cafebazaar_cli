@@ -21,11 +21,11 @@ var (
 
 // RepoInfo summarizes the local Git repository state for release automation.
 type RepoInfo struct {
-	RootDir     string `json:"root_dir" yaml:"root_dir"`
-	Branch      string `json:"branch" yaml:"branch"`
-	LatestTag   string `json:"latest_tag,omitempty" yaml:"latest_tag,omitempty"`
-	Dirty       bool   `json:"dirty" yaml:"dirty"`
-	DirtyCount  int    `json:"dirty_count" yaml:"dirty_count"`
+	RootDir    string `json:"root_dir" yaml:"root_dir"`
+	Branch     string `json:"branch" yaml:"branch"`
+	LatestTag  string `json:"latest_tag,omitempty" yaml:"latest_tag,omitempty"`
+	Dirty      bool   `json:"dirty" yaml:"dirty"`
+	DirtyCount int    `json:"dirty_count" yaml:"dirty_count"`
 }
 
 // Inspect checks whether dir is inside a Git repository and returns branch, tag, and status info.

@@ -5,7 +5,7 @@ Project instructions and architectural reference for `bazaar` (`github.com/PapaD
 ## Architecture
 
 - `cmd/bazaar/main.go`: CLI entry point wiring signal-aware `context.Context` and deterministic process exit codes.
-- `internal/api/httpclient`: shared HTTP transport with UTF-8 JSON encoding (`SetEscapeHTML(false)`), streaming multipart uploads with progress callbacks, HTTP `429` retry/backoff, configurable per-request timeouts (`DefaultRequestTimeout = 2m`, `DefaultPublishTimeout = 10m` via `DoJSONWithTimeout`, `DefaultUploadTimeout = 15m`), HTTP/HTTPS/SOCKS5 proxy support (`ParseProxyURL`, `MaskProxyURL`), and unified error parsing for Pishkhan (`type`/`message`) and Sandoghche (`detail`).
+- `internal/api/httpclient`: shared HTTP transport with UTF-8 JSON encoding (`SetEscapeHTML(false)`), streaming multipart uploads with progress callbacks, HTTP `429` retry/backoff, configurable per-request timeouts (`DefaultRequestTimeout = 2m`, `DefaultPublishTimeout = 10m` via `DoJSONWithTimeout`, `DefaultUploadTimeout = 15m`), client identification headers (`app_name=cli`, `version=<cli version>`), HTTP/HTTPS/SOCKS5 proxy support (`ParseProxyURL`, `MaskProxyURL`), and unified error parsing for Pishkhan (`type`/`message`) and Sandoghche (`detail`).
 - `internal/api/pishkhan`: client for all 10 Pishkhan Release API endpoints on `https://api.pishkhan.cafebazaar.ir` plus `WaitForBundle` polling (`U`/`S`/`P`/`D`/`E`). `CommitRelease` uses `DefaultPublishTimeout` (10 minutes) because CafeBazaar can take several minutes to inspect APKs and publish.
 - `internal/api/comments`: client for both Sandoghche Comments API endpoints on `https://sandoghche.cafebazaar.ir` (`GET /api/v0/reviews/` with all 7 filters and cursor pagination, `POST /api/v0/reviews/{id}/`).
 - `internal/api/publisher`: extensible developer-account Nasher Publisher API client (`POST /v1/apps/` with `issue_api_agent` token extraction, warning handling, and 10m/15m timeouts).
@@ -46,6 +46,8 @@ Project instructions and architectural reference for `bazaar` (`github.com/PapaD
 
 ```bash
 make vet                           # go vet ./...
+make lint                          # golangci-lint run ./...
+make security                      # govulncheck ./... and gosec checks
 make test                          # go test -race -count=1 ./...
 make build                         # builds bin/bazaar
 make install                       # installs bazaar into $GOBIN

@@ -62,7 +62,9 @@ func TestPublisherCreateAppExtractsTokenAndWarnings(t *testing.T) {
 					return
 				}
 				w.WriteHeader(http.StatusCreated)
-				_, _ = w.Write([]byte(tc.response))
+				if _, err := w.Write([]byte(tc.response)); err != nil {
+					t.Errorf("write create app response: %v", err)
+				}
 			}))
 			defer srv.Close()
 

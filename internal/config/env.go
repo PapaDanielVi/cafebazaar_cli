@@ -9,9 +9,9 @@ import (
 
 const (
 	// EnvPublisherToken supplies the developer-level Nasher token for CI/CD.
-	EnvPublisherToken = "CAFEBAZAAR_PUBLISHER_TOKEN"
+	EnvPublisherToken = "CAFEBAZAAR_PUBLISHER_TOKEN" //nolint:gosec // Environment variable name, not a credential.
 	// EnvAppToken supplies the per-app Pishkhan token directly for CI/CD.
-	EnvAppToken = "CAFEBAZAAR_APP_TOKEN"
+	EnvAppToken = "CAFEBAZAAR_APP_TOKEN" //nolint:gosec // Environment variable name, not a credential.
 	// EnvApp selects a registered package name or alias.
 	EnvApp = "CAFEBAZAAR_APP"
 	// EnvVariant selects a Gradle build variant.

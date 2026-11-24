@@ -31,6 +31,8 @@ const (
 	BuildTypeDebug = "debug"
 	// BuildTypeRelease is the implicit Android release build type.
 	BuildTypeRelease = "release"
+
+	defaultAppModule = ":app"
 )
 
 var (
@@ -131,10 +133,10 @@ func DetectProject(ctx context.Context, startDir string) (*Project, error) {
 	}
 
 	sort.Slice(modules, func(i, j int) bool {
-		if modules[i].Name == ":app" && modules[j].Name != ":app" {
+		if modules[i].Name == defaultAppModule && modules[j].Name != defaultAppModule {
 			return true
 		}
-		if modules[j].Name == ":app" && modules[i].Name != ":app" {
+		if modules[j].Name == defaultAppModule && modules[i].Name != defaultAppModule {
 			return false
 		}
 		return modules[i].Name < modules[j].Name
@@ -280,7 +282,7 @@ func discoverModulePaths(ctx context.Context, rootDir, settingsPath string) []st
 
 	if len(specs) == 0 {
 		if findBuildFile(ctx, filepath.Join(rootDir, "app")) != "" {
-			appendUnique(":app")
+			appendUnique(defaultAppModule)
 		}
 		if findBuildFile(ctx, rootDir) != "" {
 			appendUnique(":")

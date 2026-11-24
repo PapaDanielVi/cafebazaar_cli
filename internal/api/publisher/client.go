@@ -26,6 +26,8 @@ type Config struct {
 	BaseURL        string
 	Token          string
 	AuthHeaderName string
+	ClientAppName  string
+	CLIVersion     string
 	ProxyURL       string
 	HTTPClient     *http.Client
 	MaxRetries     int
@@ -46,6 +48,8 @@ func New(ctx context.Context, cfg Config) (*Client, error) {
 		BaseURL:        baseURL,
 		Token:          cfg.Token,
 		AuthHeaderName: headerName,
+		ClientAppName:  cfg.ClientAppName,
+		CLIVersion:     cfg.CLIVersion,
 		ProxyURL:       cfg.ProxyURL,
 		HTTPClient:     cfg.HTTPClient,
 		MaxRetries:     cfg.MaxRetries,

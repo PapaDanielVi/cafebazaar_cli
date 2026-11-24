@@ -8,7 +8,7 @@ LDFLAGS := -X github.com/PapaDanielVi/cafebazaar_cli/internal/cli.Version=$(VERS
 	-X github.com/PapaDanielVi/cafebazaar_cli/internal/cli.Commit=$(COMMIT) \
 	-X github.com/PapaDanielVi/cafebazaar_cli/internal/cli.BuildDate=$(BUILD_DATE)
 
-.PHONY: build test vet install clean release-dist demos
+.PHONY: build test vet lint security install clean release-dist demos
 
 DEMO_DIR ?= .
 DEMO_MASK_PATH ?= ~/projects/cafebazaar-sample-app
@@ -22,6 +22,13 @@ test:
 
 vet:
 	go vet ./...
+
+lint:
+	golangci-lint run ./...
+
+security:
+	govulncheck ./...
+	golangci-lint run --enable-only=gosec ./...
 
 install:
 	go install -ldflags "$(LDFLAGS)" $(CMD_PKG)

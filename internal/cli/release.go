@@ -37,7 +37,7 @@ func newReleaseStatusCmd(ctx context.Context, rt *AppRuntime) *cobra.Command {
 	_ = ctx
 	var only string
 	cmd := &cobra.Command{
-		Use:   "status",
+		Use:   cmdUseStatus,
 		Short: "Fetch last published, last committed, and last uncommitted releases",
 		RunE: func(c *cobra.Command, args []string) error {
 			_ = args
@@ -68,8 +68,8 @@ func runReleaseStatus(ctx context.Context, rt *AppRuntime, only string) error {
 			return pErr
 		}
 		return rt.Printer.PrintCard(ctx, "Last Published Release", []output.KeyValue{
-			{Key: "Package", Value: resolved.PackageName},
-			{Key: "Status", Value: formatReleaseSummary(ctx, rt.Printer, "PUBLISHED", resp)},
+			{Key: labelPackage, Value: resolved.PackageName},
+			{Key: labelStatus, Value: formatReleaseSummary(ctx, rt.Printer, "PUBLISHED", resp)},
 		})
 	case "committed":
 		resp, callErr := client.LastCommittedRelease(ctx)
@@ -80,8 +80,8 @@ func runReleaseStatus(ctx context.Context, rt *AppRuntime, only string) error {
 			return pErr
 		}
 		return rt.Printer.PrintCard(ctx, "Last Committed Release", []output.KeyValue{
-			{Key: "Package", Value: resolved.PackageName},
-			{Key: "Status", Value: formatReleaseSummary(ctx, rt.Printer, "COMMITTED", resp)},
+			{Key: labelPackage, Value: resolved.PackageName},
+			{Key: labelStatus, Value: formatReleaseSummary(ctx, rt.Printer, "COMMITTED", resp)},
 		})
 	case "uncommitted":
 		resp, callErr := client.LastUncommittedRelease(ctx)
@@ -92,8 +92,8 @@ func runReleaseStatus(ctx context.Context, rt *AppRuntime, only string) error {
 			return pErr
 		}
 		return rt.Printer.PrintCard(ctx, "Last Uncommitted Release", []output.KeyValue{
-			{Key: "Package", Value: resolved.PackageName},
-			{Key: "Status", Value: formatReleaseSummary(ctx, rt.Printer, "UNCOMMITTED", resp)},
+			{Key: labelPackage, Value: resolved.PackageName},
+			{Key: labelStatus, Value: formatReleaseSummary(ctx, rt.Printer, "UNCOMMITTED", resp)},
 		})
 	case "":
 		return runUnifiedStatus(ctx, rt, "")
@@ -217,17 +217,17 @@ func newReleaseUploadAPKCmd(ctx context.Context, rt *AppRuntime) *cobra.Command 
 				return pErr
 			}
 			return rt.Printer.PrintCard(c.Context(), "APK Uploaded", []output.KeyValue{
-				{Key: "Package", Value: resolved.PackageName},
-				{Key: "File", Value: filepath.Base(filePath)},
+				{Key: labelPackage, Value: resolved.PackageName},
+				{Key: labelFile, Value: filepath.Base(filePath)},
 				{Key: "Architecture", Value: effectiveArch},
-				{Key: "Version", Value: fmt.Sprintf("%s (code %d)", resp.Package.VersionName, resp.Package.VersionCode)},
+				{Key: labelVersion, Value: fmt.Sprintf("%s (code %d)", resp.Package.VersionName, resp.Package.VersionCode)},
 				{Key: "Size", Value: output.HumanBytes(c.Context(), resp.Package.APKSize)},
 				{Key: "SHA-1", Value: resp.Package.SHA1Hash},
 			})
 		},
 	}
 	cmd.Flags().StringVar(&arch, "arch", "", "CPU architecture: all, armeabi-v7a, arm64-v8a")
-	_ = cmd.RegisterFlagCompletionFunc("arch", completeArchFlag(ctx))
+	registerFlagCompletion(ctx, cmd, "arch", completeArchFlag(ctx))
 	return cmd
 }
 
@@ -271,10 +271,10 @@ func newReleaseUploadAABCmd(ctx context.Context, rt *AppRuntime) *cobra.Command 
 				return pErr
 			}
 			return rt.Printer.PrintCard(c.Context(), "AAB Uploaded", []output.KeyValue{
-				{Key: "Package", Value: resolved.PackageName},
-				{Key: "File", Value: filepath.Base(filePath)},
+				{Key: labelPackage, Value: resolved.PackageName},
+				{Key: labelFile, Value: filepath.Base(filePath)},
 				{Key: "Bundle State", Value: fmt.Sprintf("%s (%s)", resp.Bundle.State, pishkhan.DescribeBundleState(c.Context(), resp.Bundle.State))},
-				{Key: "Next Step", Value: "Upload the Bundle Signer .bin file with `bazaar release upload-bin <file.bin>`"},
+				{Key: labelNextStep, Value: "Upload the Bundle Signer .bin file with `bazaar release upload-bin <file.bin>`"},
 			})
 		},
 	}
@@ -315,10 +315,10 @@ func newReleaseUploadBinCmd(ctx context.Context, rt *AppRuntime) *cobra.Command 
 				return pErr
 			}
 			return rt.Printer.PrintCard(c.Context(), "Bundle Signer .bin Uploaded", []output.KeyValue{
-				{Key: "Package", Value: resolved.PackageName},
-				{Key: "File", Value: filepath.Base(filePath)},
+				{Key: labelPackage, Value: resolved.PackageName},
+				{Key: labelFile, Value: filepath.Base(filePath)},
 				{Key: "Bundle State", Value: fmt.Sprintf("%s (%s)", resp.Bundle.State, pishkhan.DescribeBundleState(c.Context(), resp.Bundle.State))},
-				{Key: "Next Step", Value: "Watch processing with `bazaar release bundle-status --watch`"},
+				{Key: labelNextStep, Value: "Watch processing with `bazaar release bundle-status --watch`"},
 			})
 		},
 	}
@@ -365,7 +365,7 @@ func newReleaseBundleStatusCmd(ctx context.Context, rt *AppRuntime) *cobra.Comma
 				return pErr
 			}
 			items := []output.KeyValue{
-				{Key: "Package", Value: resolved.PackageName},
+				{Key: labelPackage, Value: resolved.PackageName},
 				{Key: "State", Value: fmt.Sprintf("%s %s", rt.Printer.Theme.RenderBadge(c.Context(), string(resp.Bundle.State)), pishkhan.DescribeBundleState(c.Context(), resp.Bundle.State))},
 			}
 			if len(resp.Bundle.Errors) > 0 {

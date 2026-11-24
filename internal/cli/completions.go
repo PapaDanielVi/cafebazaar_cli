@@ -12,10 +12,16 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func registerGlobalFlagCompletions(ctx context.Context, cmd *cobra.Command, rt *AppRuntime) {
+func registerFlagCompletion(ctx context.Context, cmd *cobra.Command, flagName string, fn cobra.CompletionFunc) {
 	_ = ctx
-	_ = cmd.RegisterFlagCompletionFunc(flagApp, completeAppPackages(rt))
-	_ = cmd.RegisterFlagCompletionFunc(flagOutput, func(c *cobra.Command, args []string, toComplete string) ([]cobra.Completion, cobra.ShellCompDirective) {
+	if err := cmd.RegisterFlagCompletionFunc(flagName, fn); err != nil {
+		panic(fmt.Sprintf("register completion for flag %q on %q: %v", flagName, cmd.Name(), err))
+	}
+}
+
+func registerGlobalFlagCompletions(ctx context.Context, cmd *cobra.Command, rt *AppRuntime) {
+	registerFlagCompletion(ctx, cmd, flagApp, completeAppPackages(rt))
+	registerFlagCompletion(ctx, cmd, flagOutput, func(c *cobra.Command, args []string, toComplete string) ([]cobra.Completion, cobra.ShellCompDirective) {
 		_ = c
 		_ = args
 		_ = toComplete
@@ -26,7 +32,7 @@ func registerGlobalFlagCompletions(ctx context.Context, cmd *cobra.Command, rt *
 			cobra.CompletionWithDesc(output.FormatYAML, "Raw UTF-8 YAML"),
 		}, cobra.ShellCompDirectiveNoFileComp
 	})
-	_ = cmd.RegisterFlagCompletionFunc(flagRTL, func(c *cobra.Command, args []string, toComplete string) ([]cobra.Completion, cobra.ShellCompDirective) {
+	registerFlagCompletion(ctx, cmd, flagRTL, func(c *cobra.Command, args []string, toComplete string) ([]cobra.Completion, cobra.ShellCompDirective) {
 		_ = c
 		_ = args
 		_ = toComplete
@@ -40,7 +46,9 @@ func registerGlobalFlagCompletions(ctx context.Context, cmd *cobra.Command, rt *
 
 func ensureCompletionContext(ctx context.Context, rt *AppRuntime) {
 	if rt.Global == nil {
-		_ = rt.bootstrap(ctx)
+		if err := rt.bootstrap(ctx); err != nil {
+			return
+		}
 	}
 }
 

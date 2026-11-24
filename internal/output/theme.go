@@ -26,23 +26,23 @@ const (
 
 // Theme holds Lip Gloss styles tailored to the CafeBazaar palette.
 type Theme struct {
-	Enabled     bool
-	Header      lipgloss.Style
-	SubHeader   lipgloss.Style
-	Label       lipgloss.Style
-	Value       lipgloss.Style
-	Muted       lipgloss.Style
-	Success     lipgloss.Style
-	Warning     lipgloss.Style
-	Danger      lipgloss.Style
-	Info        lipgloss.Style
-	Card        lipgloss.Style
-	DangerCard  lipgloss.Style
-	BadgeGreen  lipgloss.Style
-	BadgeAmber  lipgloss.Style
-	BadgeRed    lipgloss.Style
-	BadgeBlue   lipgloss.Style
-	BadgeMuted  lipgloss.Style
+	Enabled    bool
+	Header     lipgloss.Style
+	SubHeader  lipgloss.Style
+	Label      lipgloss.Style
+	Value      lipgloss.Style
+	Muted      lipgloss.Style
+	Success    lipgloss.Style
+	Warning    lipgloss.Style
+	Danger     lipgloss.Style
+	Info       lipgloss.Style
+	Card       lipgloss.Style
+	DangerCard lipgloss.Style
+	BadgeGreen lipgloss.Style
+	BadgeAmber lipgloss.Style
+	BadgeRed   lipgloss.Style
+	BadgeBlue  lipgloss.Style
+	BadgeMuted lipgloss.Style
 }
 
 // NewTheme builds a styled Theme when colorEnabled is true or a zero-ANSI Theme when false.

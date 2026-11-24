@@ -65,10 +65,14 @@ func (p *Printer) renderDangerSummary(ctx context.Context, req ConfirmRequest) e
 	}
 
 	if req.TargetApp != "" {
-		b.WriteString(fmt.Sprintf("Target App: %s\n", req.TargetApp))
+		if _, err := fmt.Fprintf(&b, "Target App: %s\n", req.TargetApp); err != nil {
+			return fmt.Errorf("format target app: %w", err)
+		}
 	}
 	for _, d := range req.Details {
-		b.WriteString(fmt.Sprintf("%s: %s\n", d.Key, AnchorBiDiLine(ctx, d.Value, p.Mode.RTL)))
+		if _, err := fmt.Fprintf(&b, "%s: %s\n", d.Key, AnchorBiDiLine(ctx, d.Value, p.Mode.RTL)); err != nil {
+			return fmt.Errorf("format confirmation detail: %w", err)
+		}
 	}
 	if req.Warning != "" {
 		b.WriteString("\n")

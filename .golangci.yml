@@ -1,0 +1,64 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: standard
+  enable:
+    - bodyclose
+    - errcheck
+    - errorlint
+    - gocritic
+    - goconst
+    - godot
+    - gosec
+    - misspell
+    - nilerr
+    - noctx
+    - revive
+    - staticcheck
+    - testpackage
+    - tparallel
+    - unconvert
+    - usestdlibvars
+
+  settings:
+    errcheck:
+      check-type-assertions: true
+      check-blank: true
+    goconst:
+      min-len: 3
+      min-occurrences: 3
+    godot:
+      scope: all
+      period: true
+    gosec:
+      excludes:
+        # Subprocess calls for git, gradlew, and user-configured bundle_signer_cmd are intentional CLI features.
+        - G204
+        # File reads from user-supplied CLI paths (APK, AAB, config, changelog files) are intentional CLI features.
+        - G304
+    revive:
+      rules:
+        - name: context-as-argument
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        - name: exported
+        - name: var-naming
+        - name: empty-block
+        - name: superfluous-else
+        - name: unreachable-code
+
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - goconst
+          - gosec
+
+formatters:
+  enable:
+    - gofmt
+    - goimports

@@ -23,6 +23,14 @@ const (
 	testSampleFile = "sample-binary-content"
 )
 
+func writeTestResponse(ctx context.Context, t *testing.T, w http.ResponseWriter, body string) {
+	_ = ctx
+	t.Helper()
+	if _, err := w.Write([]byte(body)); err != nil {
+		t.Errorf("write test response: %v", err)
+	}
+}
+
 func TestPishkhanAllEndpoints(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -42,10 +50,10 @@ func TestPishkhanAllEndpoints(t *testing.T) {
 		switch {
 		case r.Method == http.MethodPost && r.URL.Path == pishkhan.EndpointReleases:
 			w.WriteHeader(http.StatusCreated)
-			_, _ = w.Write([]byte(`{"type":"success","message":"New Release successfully created.","release":{"creation_date":"2026-01-01T10:00:00","packages":[],"auto_publish":false,"staged_rollout_percentage":100}}`))
+			writeTestResponse(ctx, t, w, `{"type":"success","message":"New Release successfully created.","release":{"creation_date":"2026-01-01T10:00:00","packages":[],"auto_publish":false,"staged_rollout_percentage":100}}`)
 		case r.Method == http.MethodDelete && r.URL.Path == pishkhan.EndpointReleases:
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"type":"success","message":"Release successfully deleted."}`))
+			writeTestResponse(ctx, t, w, `{"type":"success","message":"Release successfully deleted."}`)
 		case r.Method == http.MethodPost && r.URL.Path == pishkhan.EndpointUploadAPK:
 			if err := r.ParseMultipartForm(1 << 20); err != nil {
 				t.Errorf("parse apk form: %v", err)
@@ -57,7 +65,7 @@ func TestPishkhanAllEndpoints(t *testing.T) {
 				t.Errorf("missing apk part: %v", err)
 			}
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"type":"success","message":"Package successfully added to release.","package":{"version_code":12,"version_name":"1.2.0"}}`))
+			writeTestResponse(ctx, t, w, `{"type":"success","message":"Package successfully added to release.","package":{"version_code":12,"version_name":"1.2.0"}}`)
 		case r.Method == http.MethodPost && r.URL.Path == pishkhan.EndpointUploadAAB:
 			if err := r.ParseMultipartForm(1 << 20); err != nil {
 				t.Errorf("parse aab form: %v", err)
@@ -66,7 +74,7 @@ func TestPishkhanAllEndpoints(t *testing.T) {
 				t.Errorf("missing aab part: %v", err)
 			}
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"type":"success","message":"AAB file successfully added to release.","bundle":{"state":"U","errors":null},"warnings":[]}`))
+			writeTestResponse(ctx, t, w, `{"type":"success","message":"AAB file successfully added to release.","bundle":{"state":"U","errors":null},"warnings":[]}`)
 		case r.Method == http.MethodPost && r.URL.Path == pishkhan.EndpointUploadBin:
 			if err := r.ParseMultipartForm(1 << 20); err != nil {
 				t.Errorf("parse bin form: %v", err)
@@ -75,25 +83,25 @@ func TestPishkhanAllEndpoints(t *testing.T) {
 				t.Errorf("missing bin file part: %v", err)
 			}
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"type":"success","message":"Bin file successfully uploaded.","bundle":{"state":"S","errors":null}}`))
+			writeTestResponse(ctx, t, w, `{"type":"success","message":"Bin file successfully uploaded.","bundle":{"state":"S","errors":null}}`)
 		case r.Method == http.MethodGet && r.URL.Path == pishkhan.EndpointBundleStatus:
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"type":"success","message":"Bundle release status successfully retrieved.","bundle":{"state":"D","errors":null}}`))
+			writeTestResponse(ctx, t, w, `{"type":"success","message":"Bundle release status successfully retrieved.","bundle":{"state":"D","errors":null}}`)
 		case r.Method == http.MethodPost && r.URL.Path == pishkhan.EndpointCommit:
 			if err := json.NewDecoder(r.Body).Decode(&gotCommitReq); err != nil {
 				t.Errorf("decode commit request: %v", err)
 			}
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"type":"success","message":"Release successfully committed.","release":{"id":159,"release_state":"Active","committed":true,"staged_rollout_percentage":10,"auto_publish":true}}`))
+			writeTestResponse(ctx, t, w, `{"type":"success","message":"Release successfully committed.","release":{"id":159,"release_state":"Active","committed":true,"staged_rollout_percentage":10,"auto_publish":true}}`)
 		case r.Method == http.MethodGet && r.URL.Path == pishkhan.EndpointLastCommitted:
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"type":"success","message":"ok","release":{"packages":[{"version_code":11,"version_name":"1.1.0"}]}}`))
+			writeTestResponse(ctx, t, w, `{"type":"success","message":"ok","release":{"packages":[{"version_code":11,"version_name":"1.1.0"}]}}`)
 		case r.Method == http.MethodGet && r.URL.Path == pishkhan.EndpointLastUncommitted:
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"type":"not-exists","message":"No uncommitted release."}`))
+			writeTestResponse(ctx, t, w, `{"type":"not-exists","message":"No uncommitted release."}`)
 		case r.Method == http.MethodGet && r.URL.Path == pishkhan.EndpointLastPublished:
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"type":"success","message":"ok","release":{"packages":[{"version_code":10,"version_name":"1.0.0"}]}}`))
+			writeTestResponse(ctx, t, w, `{"type":"success","message":"ok","release":{"packages":[{"version_code":10,"version_name":"1.0.0"}]}}`)
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
@@ -204,7 +212,7 @@ func TestWaitForBundle(t *testing.T) {
 					i = len(tc.states) - 1
 				}
 				w.WriteHeader(http.StatusOK)
-				_, _ = w.Write([]byte(tc.states[i]))
+				writeTestResponse(ctx, t, w, tc.states[i])
 			}))
 			defer srv.Close()
 

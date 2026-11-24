@@ -39,7 +39,7 @@ func newReviewListCmd(ctx context.Context, rt *AppRuntime) *cobra.Command {
 	var limit int
 
 	cmd := &cobra.Command{
-		Use:   "list",
+		Use:   cmdUseList,
 		Short: "List user reviews with optional filters (GET /api/v0/reviews/)",
 		RunE: func(c *cobra.Command, args []string) error {
 			_ = args
@@ -115,10 +115,10 @@ func runReviewList(ctx context.Context, rt *AppRuntime, filter comments.ListRevi
 	}
 
 	payload := map[string]any{
-		"package_name": resolved.PackageName,
-		"count":        len(reviews),
-		"next":         nextCursor,
-		"results":      reviews,
+		jsonKeyPackageName: resolved.PackageName,
+		"count":            len(reviews),
+		"next":             nextCursor,
+		"results":          reviews,
 	}
 	if printed, pErr := rt.Printer.PrintStructured(ctx, payload); printed || pErr != nil {
 		return pErr

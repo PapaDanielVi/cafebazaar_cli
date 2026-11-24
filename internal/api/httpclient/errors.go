@@ -9,11 +9,15 @@ import (
 
 const (
 	// HeaderPishkhanSecret is the default CafeBazaar API authentication header name.
-	HeaderPishkhanSecret = "CAFEBAZAAR-PISHKHAN-API-SECRET"
+	HeaderPishkhanSecret = "CAFEBAZAAR-PISHKHAN-API-SECRET" //nolint:gosec // HTTP header name, not a credential.
 	// HeaderContentType is the standard HTTP Content-Type header name.
 	HeaderContentType = "Content-Type"
 	// HeaderUserAgent is the standard HTTP User-Agent header name.
 	HeaderUserAgent = "User-Agent"
+	// HeaderAppName identifies the client tool name (cli) on outgoing CafeBazaar requests.
+	HeaderAppName = "app_name"
+	// HeaderVersion identifies the bazaar CLI build version on outgoing CafeBazaar requests.
+	HeaderVersion = "version"
 	// HeaderRetryAfter is the standard HTTP Retry-After header name.
 	HeaderRetryAfter = "Retry-After"
 	// ContentTypeJSON is the UTF-8 JSON content type expected by CafeBazaar APIs.
@@ -24,6 +28,10 @@ const (
 	ContentTypeOctetStream = "application/octet-stream"
 	// DefaultUserAgent identifies the bazaar CLI in outgoing API requests.
 	DefaultUserAgent = "bazaar-cli/1.0"
+	// DefaultClientAppName is the default app_name header value identifying this CLI tool.
+	DefaultClientAppName = "cli"
+	// DefaultCLIVersion is the fallback version header value when no CLI release version is injected.
+	DefaultCLIVersion = "dev"
 	// ProxyDirect bypasses all environment proxy settings and connects directly.
 	ProxyDirect = "direct"
 	// ProxyNone bypasses all environment proxy settings and connects directly.

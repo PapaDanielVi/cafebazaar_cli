@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -170,12 +171,18 @@ func ApplyBump(ctx context.Context, plan BumpPlan, dryRun bool) error {
 		return nil
 	}
 
-	info, err := os.Stat(plan.BuildFile)
-	if err != nil {
-		return fmt.Errorf("stat build file %q: %w", plan.BuildFile, err)
+	cleanBuildFile := filepath.Clean(plan.BuildFile)
+	baseName := filepath.Base(cleanBuildFile)
+	if baseName != FileBuildGroovy && baseName != FileBuildKTS {
+		return fmt.Errorf("refusing to modify non-Gradle build file %q", cleanBuildFile)
 	}
-	if err := os.WriteFile(plan.BuildFile, []byte(updated), info.Mode().Perm()); err != nil {
-		return fmt.Errorf("write updated build file %q: %w", plan.BuildFile, err)
+	info, err := os.Stat(cleanBuildFile)
+	if err != nil {
+		return fmt.Errorf("stat build file %q: %w", cleanBuildFile, err)
+	}
+	//nolint:gosec // Build file path is validated to be a Gradle build script.
+	if err := os.WriteFile(cleanBuildFile, []byte(updated), info.Mode().Perm()); err != nil {
+		return fmt.Errorf("write updated build file %q: %w", cleanBuildFile, err)
 	}
 	return nil
 }

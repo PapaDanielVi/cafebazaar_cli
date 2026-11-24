@@ -63,7 +63,7 @@ type ListReviewsFilter struct {
 	Cursor            string
 }
 
-// Validate checks filter constraints and encodes them into URL query parameters.
+// ToQuery validates filter constraints and encodes them into URL query parameters.
 func (f ListReviewsFilter) ToQuery(ctx context.Context) (url.Values, error) {
 	_ = ctx
 	if f.RateMin != 0 && (f.RateMin < MinRating || f.RateMin > MaxRating) {

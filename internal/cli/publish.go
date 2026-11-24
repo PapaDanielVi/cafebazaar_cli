@@ -100,12 +100,12 @@ func newPublishCmd(ctx context.Context, rt *AppRuntime) *cobra.Command {
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview every release step without modifying Gradle, Git, or CafeBazaar")
 	cmd.Flags().DurationVar(&pollInterval, "poll-interval", pishkhan.DefaultBundlePollInterval, "AAB bundle status polling interval")
 
-	_ = cmd.RegisterFlagCompletionFunc("variant", completeGradleVariants(rt))
-	_ = cmd.RegisterFlagCompletionFunc("bump", completeBumpFlag(ctx))
-	_ = cmd.RegisterFlagCompletionFunc("arch", completeArchFlag(ctx))
-	_ = cmd.RegisterFlagCompletionFunc("apk", completeArtifactPaths(rt, android.ArtifactTypeAPK, "apk"))
-	_ = cmd.RegisterFlagCompletionFunc("aab", completeArtifactPaths(rt, android.ArtifactTypeAAB, "aab"))
-	_ = cmd.RegisterFlagCompletionFunc("bin", completeArtifactPaths(rt, android.ArtifactTypeBin, "bin"))
+	registerFlagCompletion(ctx, cmd, "variant", completeGradleVariants(rt))
+	registerFlagCompletion(ctx, cmd, "bump", completeBumpFlag(ctx))
+	registerFlagCompletion(ctx, cmd, "arch", completeArchFlag(ctx))
+	registerFlagCompletion(ctx, cmd, "apk", completeArtifactPaths(rt, android.ArtifactTypeAPK, "apk"))
+	registerFlagCompletion(ctx, cmd, "aab", completeArtifactPaths(rt, android.ArtifactTypeAAB, "aab"))
+	registerFlagCompletion(ctx, cmd, "bin", completeArtifactPaths(rt, android.ArtifactTypeBin, "bin"))
 
 	return cmd
 }
@@ -295,9 +295,9 @@ func runPublishCmd(ctx context.Context, rt *AppRuntime, f publishCmdFlags) error
 		title = "CafeBazaar Publish Plan (Dry Run)"
 	}
 	items := []output.KeyValue{
-		{Key: "Package Name", Value: res.PackageName},
-		{Key: "Variant", Value: fallbackDash(ctx, res.Variant)},
-		{Key: "Artifact", Value: fallbackDash(ctx, res.ArtifactPath)},
+		{Key: labelPackageName, Value: res.PackageName},
+		{Key: labelVariant, Value: fallbackDash(ctx, res.Variant)},
+		{Key: labelArtifact, Value: fallbackDash(ctx, res.ArtifactPath)},
 		{Key: "Committed", Value: fmt.Sprintf("%v", res.Committed)},
 	}
 	if res.GitTagName != "" {

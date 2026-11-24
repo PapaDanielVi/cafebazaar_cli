@@ -13,6 +13,7 @@ import (
 
 	"github.com/PapaDanielVi/cafebazaar_cli/internal/android"
 	"github.com/PapaDanielVi/cafebazaar_cli/internal/api/comments"
+	"github.com/PapaDanielVi/cafebazaar_cli/internal/api/httpclient"
 	"github.com/PapaDanielVi/cafebazaar_cli/internal/api/pishkhan"
 	"github.com/PapaDanielVi/cafebazaar_cli/internal/api/publisher"
 	"github.com/PapaDanielVi/cafebazaar_cli/internal/auth"
@@ -20,6 +21,14 @@ import (
 	"github.com/PapaDanielVi/cafebazaar_cli/internal/config"
 	"github.com/PapaDanielVi/cafebazaar_cli/internal/output"
 )
+
+func writeTestResponse(ctx context.Context, t *testing.T, w http.ResponseWriter, body string) {
+	_ = ctx
+	t.Helper()
+	if _, err := w.Write([]byte(body)); err != nil {
+		t.Errorf("write test response: %v", err)
+	}
+}
 
 func setupAndroidFixture(t *testing.T) string {
 	t.Helper()
@@ -104,17 +113,17 @@ func TestInitExistingAndAutoFolderAuthAndDangerGuard(t *testing.T) {
 		switch {
 		case r.Method == http.MethodGet && r.URL.Path == pishkhan.EndpointLastPublished:
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"type":"success","release":{"packages":[{"version_code":10,"version_name":"1.5.0"}]}}`))
+			writeTestResponse(ctx, t, w, `{"type":"success","release":{"packages":[{"version_code":10,"version_name":"1.5.0"}]}}`)
 		case r.Method == http.MethodGet && r.URL.Path == pishkhan.EndpointLastCommitted:
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"type":"not-exists"}`))
+			writeTestResponse(ctx, t, w, `{"type":"not-exists"}`)
 		case r.Method == http.MethodGet && r.URL.Path == pishkhan.EndpointLastUncommitted:
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"type":"not-exists"}`))
+			writeTestResponse(ctx, t, w, `{"type":"not-exists"}`)
 		case r.Method == http.MethodDelete && r.URL.Path == pishkhan.EndpointReleases:
 			deleted = true
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"type":"success","message":"Release successfully deleted."}`))
+			writeTestResponse(ctx, t, w, `{"type":"success","message":"Release successfully deleted."}`)
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
@@ -124,7 +133,7 @@ func TestInitExistingAndAutoFolderAuthAndDangerGuard(t *testing.T) {
 	commentsSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == comments.EndpointReviews {
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"next":null,"previous":null,"results":[{"id":77,"rate":5,"text":"اپلیکیشن بسیار عالی است"}]}`))
+			writeTestResponse(ctx, t, w, `{"next":null,"previous":null,"results":[{"id":77,"rate":5,"text":"اپلیکیشن بسیار عالی است"}]}`)
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)
@@ -208,7 +217,7 @@ func TestInitNewAppCapturesReturnedAppToken(t *testing.T) {
 	pubSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == publisher.EndpointApps {
 			w.WriteHeader(http.StatusCreated)
-			_, _ = w.Write([]byte(`{"type":"success","message":"App created.","package_name":"ir.demo.shop","api_agent_token":"issued-app-token-777"}`))
+			writeTestResponse(ctx, t, w, `{"type":"success","message":"App created.","package_name":"ir.demo.shop","api_agent_token":"issued-app-token-777"}`)
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)
@@ -259,10 +268,14 @@ func TestCLIProxyFlagRoutesRequestsThroughProxy(t *testing.T) {
 	ctx := context.Background()
 
 	var hitProxy bool
+	var gotAppName string
+	var gotVersion string
 	proxySrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		hitProxy = true
+		gotAppName = r.Header.Get(httpclient.HeaderAppName)
+		gotVersion = r.Header.Get(httpclient.HeaderVersion)
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"type":"success","release":{"packages":[{"version_code":21,"version_name":"2.1.0"}]}}`))
+		writeTestResponse(ctx, t, w, `{"type":"success","release":{"packages":[{"version_code":21,"version_name":"2.1.0"}]}}`)
 	}))
 	defer proxySrv.Close()
 
@@ -294,6 +307,12 @@ func TestCLIProxyFlagRoutesRequestsThroughProxy(t *testing.T) {
 	}
 	if !hitProxy {
 		t.Fatal("expected CLI command to route through proxy server")
+	}
+	if gotAppName != httpclient.DefaultClientAppName {
+		t.Fatalf("got app_name header %q, want %q", gotAppName, httpclient.DefaultClientAppName)
+	}
+	if gotVersion != cli.Version {
+		t.Fatalf("got version header %q, want %q", gotVersion, cli.Version)
 	}
 	if !strings.Contains(outBuf.String(), `"version_code": 21`) {
 		t.Fatalf("unexpected proxied output: %s", outBuf.String())

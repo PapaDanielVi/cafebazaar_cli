@@ -61,19 +61,19 @@ type Options struct {
 
 // Result records every action taken (or planned during --dry-run) by the pipeline.
 type Result struct {
-	DryRun        bool                   `json:"dry_run" yaml:"dry_run"`
-	PackageName   string                 `json:"package_name" yaml:"package_name"`
-	Variant       string                 `json:"variant,omitempty" yaml:"variant,omitempty"`
-	BumpPlan      *android.BumpPlan      `json:"bump_plan,omitempty" yaml:"bump_plan,omitempty"`
-	BuiltTask     string                 `json:"built_task,omitempty" yaml:"built_task,omitempty"`
-	ArtifactPath  string                 `json:"artifact_path,omitempty" yaml:"artifact_path,omitempty"`
-	BinPath       string                 `json:"bin_path,omitempty" yaml:"bin_path,omitempty"`
-	GitCommitMsg  string                 `json:"git_commit_message,omitempty" yaml:"git_commit_message,omitempty"`
-	GitTagName    string                 `json:"git_tag_name,omitempty" yaml:"git_tag_name,omitempty"`
-	BundleState   pishkhan.BundleState   `json:"bundle_state,omitempty" yaml:"bundle_state,omitempty"`
-	Committed     bool                   `json:"committed" yaml:"committed"`
-	Release       *pishkhan.ReleaseInfo  `json:"release,omitempty" yaml:"release,omitempty"`
-	Steps         []string               `json:"steps" yaml:"steps"`
+	DryRun       bool                  `json:"dry_run" yaml:"dry_run"`
+	PackageName  string                `json:"package_name" yaml:"package_name"`
+	Variant      string                `json:"variant,omitempty" yaml:"variant,omitempty"`
+	BumpPlan     *android.BumpPlan     `json:"bump_plan,omitempty" yaml:"bump_plan,omitempty"`
+	BuiltTask    string                `json:"built_task,omitempty" yaml:"built_task,omitempty"`
+	ArtifactPath string                `json:"artifact_path,omitempty" yaml:"artifact_path,omitempty"`
+	BinPath      string                `json:"bin_path,omitempty" yaml:"bin_path,omitempty"`
+	GitCommitMsg string                `json:"git_commit_message,omitempty" yaml:"git_commit_message,omitempty"`
+	GitTagName   string                `json:"git_tag_name,omitempty" yaml:"git_tag_name,omitempty"`
+	BundleState  pishkhan.BundleState  `json:"bundle_state,omitempty" yaml:"bundle_state,omitempty"`
+	Committed    bool                  `json:"committed" yaml:"committed"`
+	Release      *pishkhan.ReleaseInfo `json:"release,omitempty" yaml:"release,omitempty"`
+	Steps        []string              `json:"steps" yaml:"steps"`
 }
 
 // Run executes (or previews during DryRun) the full Android to CafeBazaar release pipeline.

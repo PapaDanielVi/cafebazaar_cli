@@ -7,7 +7,14 @@
 **The command-line tool for CafeBazaar Android app publishing, releases, and user reviews.**
 
 [![CI](https://github.com/PapaDanielVi/cafebazaar_cli/actions/workflows/ci.yml/badge.svg)](https://github.com/PapaDanielVi/cafebazaar_cli/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/PapaDanielVi/cafebazaar_cli?color=00B14F)](https://github.com/PapaDanielVi/cafebazaar_cli/releases/latest)
+[![Docker](https://github.com/PapaDanielVi/cafebazaar_cli/actions/workflows/docker.yml/badge.svg)](https://github.com/PapaDanielVi/cafebazaar_cli/pkgs/container/cafebazaar_cli)
+[![Go Report Card](https://goreportcard.com/badge/github.com/PapaDanielVi/cafebazaar_cli)](https://goreportcard.com/report/github.com/PapaDanielVi/cafebazaar_cli)
+[![Go Reference](https://pkg.go.dev/badge/github.com/PapaDanielVi/cafebazaar_cli.svg)](https://pkg.go.dev/github.com/PapaDanielVi/cafebazaar_cli)
+
 [![Go Version](https://img.shields.io/github/go-mod/go-version/PapaDanielVi/cafebazaar_cli?color=00B14F)](go.mod)
+[![Downloads](https://img.shields.io/github/downloads/PapaDanielVi/cafebazaar_cli/total?color=00B14F)](https://github.com/PapaDanielVi/cafebazaar_cli/releases)
+[![Homebrew](https://img.shields.io/badge/Homebrew-PapaDanielVi%2Ftap%2Fbazaar-fbb040?logo=homebrew&logoColor=white)](https://github.com/PapaDanielVi/homebrew-tap)
 [![License: MIT](https://img.shields.io/badge/License-MIT-00B14F.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-slate)](https://github.com/PapaDanielVi/cafebazaar_cli)
 
@@ -72,7 +79,7 @@ curl -fsSL https://raw.githubusercontent.com/PapaDanielVi/cafebazaar_cli/master/
 Install a specific version or custom directory:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/PapaDanielVi/cafebazaar_cli/master/scripts/install.sh | bash -s -- -v v1.0.1 -d "$HOME/.local/bin"
+curl -fsSL https://raw.githubusercontent.com/PapaDanielVi/cafebazaar_cli/master/scripts/install.sh | bash -s -- -v v1.0.4 -d "$HOME/.local/bin"
 ```
 
 ### Windows (PowerShell)
@@ -84,7 +91,7 @@ irm https://raw.githubusercontent.com/PapaDanielVi/cafebazaar_cli/master/scripts
 To pin a version in PowerShell:
 
 ```powershell
-$env:BAZAAR_VERSION = "v1.0.1"
+$env:BAZAAR_VERSION = "v1.0.4"
 irm https://raw.githubusercontent.com/PapaDanielVi/cafebazaar_cli/master/scripts/install.ps1 | iex
 ```
 
@@ -97,7 +104,7 @@ Multi-arch images (`linux/amd64`, `linux/arm64`) are published to GHCR for CI/CD
 docker pull ghcr.io/papadanielvi/cafebazaar_cli:latest
 
 # Pinned version
-docker pull ghcr.io/papadanielvi/cafebazaar_cli:v1.0.1
+docker pull ghcr.io/papadanielvi/cafebazaar_cli:v1.0.4
 
 # Run against your local project directory
 docker run --rm \

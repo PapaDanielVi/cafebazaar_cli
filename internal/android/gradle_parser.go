@@ -12,16 +12,16 @@ import (
 )
 
 var (
-	namespaceRe          = regexp.MustCompile(`\bnamespace\s*(?:=|\s)\s*["']([^"']+)["']`)
-	applicationIDRe      = regexp.MustCompile(`\bapplicationId\s*(?:=|\s)\s*["']([^"']+)["']`)
+	namespaceRe           = regexp.MustCompile(`\bnamespace\s*(?:=|\s)\s*["']([^"']+)["']`)
+	applicationIDRe       = regexp.MustCompile(`\bapplicationId\s*(?:=|\s)\s*["']([^"']+)["']`)
 	applicationIDSuffixRe = regexp.MustCompile(`\bapplicationIdSuffix\s*(?:=|\s)\s*["']([^"']+)["']`)
-	versionNameSuffixRe  = regexp.MustCompile(`\bversionNameSuffix\s*(?:=|\s)\s*["']([^"']+)["']`)
-	versionCodeIntRe     = regexp.MustCompile(`\bversionCode\s*(?:=|\s)\s*(\d+)`)
-	versionCodeVarRe     = regexp.MustCompile(`\bversionCode\s*(?:=|\s)\s*([^\r\n]+)`)
-	versionNameStrRe     = regexp.MustCompile(`\bversionName\s*(?:=|\s)\s*["']([^"']+)["']`)
-	versionNameVarRe     = regexp.MustCompile(`\bversionName\s*(?:=|\s)\s*([^\r\n]+)`)
-	dimensionRe          = regexp.MustCompile(`\bdimension\s*(?:=|\s)\s*["']([^"']+)["']`)
-	flavorDimensionsRe   = regexp.MustCompile(`flavorDimensions\s*(?:\+=|=|\s|\()\s*([^\r\n]+)`)
+	versionNameSuffixRe   = regexp.MustCompile(`\bversionNameSuffix\s*(?:=|\s)\s*["']([^"']+)["']`)
+	versionCodeIntRe      = regexp.MustCompile(`\bversionCode\s*(?:=|\s)\s*(\d+)`)
+	versionCodeVarRe      = regexp.MustCompile(`\bversionCode\s*(?:=|\s)\s*([^\r\n]+)`)
+	versionNameStrRe      = regexp.MustCompile(`\bversionName\s*(?:=|\s)\s*["']([^"']+)["']`)
+	versionNameVarRe      = regexp.MustCompile(`\bversionName\s*(?:=|\s)\s*([^\r\n]+)`)
+	dimensionRe           = regexp.MustCompile(`\bdimension\s*(?:=|\s)\s*["']([^"']+)["']`)
+	flavorDimensionsRe    = regexp.MustCompile(`flavorDimensions\s*(?:\+=|=|\s|\()\s*([^\r\n]+)`)
 
 	namedBlockHeaderRe = regexp.MustCompile(`^(?:create|getByName|named|register|maybeCreate)\s*\(\s*["']([^"']+)["']\s*\)$`)
 	identBlockHeaderRe = regexp.MustCompile(`^([A-Za-z_][A-Za-z0-9_]*)$`)
@@ -350,9 +350,10 @@ func findMatchingBrace(ctx context.Context, src string, openIdx int) int {
 			inQuote = ch
 			continue
 		}
-		if ch == '{' {
+		switch ch {
+		case '{':
 			depth++
-		} else if ch == '}' {
+		case '}':
 			depth--
 			if depth == 0 {
 				return i
@@ -398,7 +399,7 @@ func stripComments(ctx context.Context, src string) string {
 		}
 		if ch == '/' && i+1 < n && src[i+1] == '*' {
 			i += 2
-			for i+1 < n && !(src[i] == '*' && src[i+1] == '/') {
+			for i+1 < n && (src[i] != '*' || src[i+1] != '/') {
 				if src[i] == '\n' {
 					b.WriteByte('\n')
 				}
@@ -419,9 +420,6 @@ func loadGradleProperties(ctx context.Context, rootDir string) map[string]string
 	if err != nil {
 		return out
 	}
-	defer func() {
-		_ = file.Close()
-	}()
 
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
@@ -433,6 +431,9 @@ func loadGradleProperties(ctx context.Context, rootDir string) map[string]string
 			out[strings.TrimSpace(k)] = strings.TrimSpace(v)
 		}
 	}
+	if closeErr := file.Close(); closeErr != nil {
+		return out
+	}
 	return out
 }
 
@@ -443,9 +444,6 @@ func loadVersionCatalog(ctx context.Context, rootDir string) map[string]string {
 	if err != nil {
 		return out
 	}
-	defer func() {
-		_ = file.Close()
-	}()
 
 	inVersions := false
 	scanner := bufio.NewScanner(file)
@@ -466,6 +464,9 @@ func loadVersionCatalog(ctx context.Context, rootDir string) map[string]string {
 			val = strings.Trim(val, `"'`)
 			out[strings.TrimSpace(k)] = val
 		}
+	}
+	if closeErr := file.Close(); closeErr != nil {
+		return out
 	}
 	return out
 }

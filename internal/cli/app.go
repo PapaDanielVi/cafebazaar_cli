@@ -29,7 +29,7 @@ func newAppCmd(ctx context.Context, rt *AppRuntime) *cobra.Command {
 func newAppListCmd(ctx context.Context, rt *AppRuntime) *cobra.Command {
 	_ = ctx
 	return &cobra.Command{
-		Use:   "list",
+		Use:   cmdUseList,
 		Short: "List all registered apps in bazaar",
 		RunE: func(c *cobra.Command, args []string) error {
 			_ = args
@@ -55,7 +55,7 @@ func runAppList(ctx context.Context, rt *AppRuntime) error {
 		}
 		rows = append(rows, []string{marker, a.PackageName, fallbackDash(ctx, a.Alias), a.TokenSource, a.Backend, strings.Join(a.Paths, ", ")})
 	}
-	return rt.Printer.PrintTable(ctx, []string{"Def", "Package Name", "Alias", "Origin", "Storage", "Bound Folders"}, rows)
+	return rt.Printer.PrintTable(ctx, []string{"Def", labelPackageName, "Alias", "Origin", labelStorage, "Bound Folders"}, rows)
 }
 
 func newAppUseCmd(ctx context.Context, rt *AppRuntime) *cobra.Command {
@@ -93,7 +93,6 @@ func newAppUseCmd(ctx context.Context, rt *AppRuntime) *cobra.Command {
 }
 
 func newAppCreateCmd(ctx context.Context, rt *AppRuntime) *cobra.Command {
-	_ = ctx
 	var pkgFlag string
 	var artifactFlag string
 	var issueAgent bool
@@ -117,8 +116,8 @@ func newAppCreateCmd(ctx context.Context, rt *AppRuntime) *cobra.Command {
 	cmd.Flags().StringVar(&authHeader, "auth-header", "", "Override Publisher API auth header name")
 	cmd.Flags().StringVar(&baseURL, "base-url", "", "Override Publisher API base URL")
 
-	_ = cmd.RegisterFlagCompletionFunc("package", completeAppPackages(rt))
-	_ = cmd.RegisterFlagCompletionFunc("artifact", completeArtifactPaths(rt, android.ArtifactTypeAPK, "apk"))
+	registerFlagCompletion(ctx, cmd, "package", completeAppPackages(rt))
+	registerFlagCompletion(ctx, cmd, "artifact", completeArtifactPaths(rt, android.ArtifactTypeAPK, "apk"))
 	return cmd
 }
 
@@ -156,7 +155,7 @@ func runAppCreate(
 		TargetApp: pkg,
 		Warning:   "Creates a new app under your developer account via POST /v1/apps/ and submits its first version for review.",
 		Details: []output.KeyValue{
-			{Key: "Artifact", Value: fallbackDash(ctx, artifactFlag)},
+			{Key: labelArtifact, Value: fallbackDash(ctx, artifactFlag)},
 			{Key: "Issue App Token", Value: fmt.Sprintf("%v", issueAgent)},
 		},
 		PromptLabel: fmt.Sprintf("Create and submit new app %s?", pkg),
@@ -209,7 +208,7 @@ func runAppCreate(
 	}
 
 	items := []output.KeyValue{
-		{Key: "Package Name", Value: fallbackDash(ctx, resp.PackageName)},
+		{Key: labelPackageName, Value: fallbackDash(ctx, resp.PackageName)},
 		{Key: "Message", Value: fallbackDash(ctx, resp.Message)},
 	}
 	if resp.AppToken != "" {
