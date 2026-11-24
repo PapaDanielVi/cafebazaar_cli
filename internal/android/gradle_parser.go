@@ -23,10 +23,11 @@ var (
 	dimensionRe           = regexp.MustCompile(`\bdimension\s*(?:=|\s)\s*["']([^"']+)["']`)
 	flavorDimensionsRe    = regexp.MustCompile(`flavorDimensions\s*(?:\+=|=|\s|\()\s*([^\r\n]+)`)
 
-	namedBlockHeaderRe = regexp.MustCompile(`^(?:create|getByName|named|register|maybeCreate)\s*\(\s*["']([^"']+)["']\s*\)$`)
-	identBlockHeaderRe = regexp.MustCompile(`^([A-Za-z_][A-Za-z0-9_]*)$`)
-	propRefRe          = regexp.MustCompile(`(?:project\.property|findProperty|providers\.gradleProperty)\s*\(\s*["']([^"']+)["']\s*\)`)
-	libsVersionRefRe   = regexp.MustCompile(`libs\.versions\.([A-Za-z0-9_.]+)`)
+	namedBlockHeaderRe     = regexp.MustCompile(`^(?:create|getByName|named|register|maybeCreate)(?:<[^>]+>)?\s*\(\s*["']([^"']+)["']\s*\)$`)
+	delegatedBlockHeaderRe = regexp.MustCompile(`^(?:val|var)\s+([A-Za-z_][A-Za-z0-9_]*)\s+by\s+(?:getting|creating|registering|existing)\b`)
+	identBlockHeaderRe     = regexp.MustCompile(`^([A-Za-z_][A-Za-z0-9_]*)$`)
+	propRefRe              = regexp.MustCompile(`(?:project\.property|findProperty|providers\.gradleProperty)\s*\(\s*["']([^"']+)["']\s*\)`)
+	libsVersionRefRe       = regexp.MustCompile(`libs\.versions\.([A-Za-z0-9_.]+)`)
 )
 
 type gradleBlock struct {
@@ -258,6 +259,9 @@ func extractNamedBlock(ctx context.Context, src, name string) (string, bool) {
 func extractBlockName(ctx context.Context, header string) string {
 	_ = ctx
 	trimmed := strings.TrimSpace(header)
+	if m := delegatedBlockHeaderRe.FindStringSubmatch(trimmed); len(m) >= 2 {
+		return m[1]
+	}
 	if m := namedBlockHeaderRe.FindStringSubmatch(trimmed); len(m) >= 2 {
 		return m[1]
 	}

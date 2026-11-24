@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/huh"
@@ -22,6 +23,11 @@ func (p *Printer) Select(ctx context.Context, title, description string, options
 	}
 	if len(options) == 0 {
 		return "", fmt.Errorf("no options available for %q", title)
+	}
+
+	// Use simple line reading when In is not a real TTY (for deterministic tests).
+	if !isTerminalReader(ctx, p.In) {
+		return p.promptLineSelect(ctx, title, options)
 	}
 
 	huhOpts := make([]huh.Option[string], 0, len(options))
@@ -141,6 +147,40 @@ func (p *Printer) readLine(ctx context.Context) (string, error) {
 	}
 	line, err := p.lineReader.ReadString('\n')
 	return line, err
+}
+
+func (p *Printer) promptLineSelect(ctx context.Context, title string, options []SelectOption) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", fmt.Errorf("select cancelled: %w", err)
+	}
+	if _, err := fmt.Fprintln(p.Err, title); err != nil {
+		return "", fmt.Errorf("write select title: %w", err)
+	}
+	for i, opt := range options {
+		if _, err := fmt.Fprintf(p.Err, "  %d) %s\n", i+1, opt.Label); err != nil {
+			return "", fmt.Errorf("write select option: %w", err)
+		}
+	}
+	if _, err := fmt.Fprintf(p.Err, "Select [1-%d]: ", len(options)); err != nil {
+		return "", fmt.Errorf("write select prompt: %w", err)
+	}
+	line, err := p.readLine(ctx)
+	if err != nil && len(line) == 0 {
+		return options[0].Value, nil
+	}
+	trimmed := strings.TrimSpace(line)
+	if trimmed == "" {
+		return options[0].Value, nil
+	}
+	if idx, convErr := strconv.Atoi(trimmed); convErr == nil && idx >= 1 && idx <= len(options) {
+		return options[idx-1].Value, nil
+	}
+	for _, opt := range options {
+		if strings.EqualFold(opt.Value, trimmed) {
+			return opt.Value, nil
+		}
+	}
+	return "", fmt.Errorf("invalid selection %q for %q", trimmed, title)
 }
 
 func (p *Printer) promptLineInput(ctx context.Context, title, defaultValue string) (string, error) {

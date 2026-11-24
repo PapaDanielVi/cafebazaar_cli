@@ -408,9 +408,19 @@ func TestResolveTaggedRepoVariant(t *testing.T) {
 			withTag:     true,
 			mod:         flavoredMod,
 			current:     flavoredMod.Variants[2],
-			input:       "y\n",
+			input:       "1\n",
 			wantVariant: "freeRelease",
 			wantPkg:     "ir.demo.free",
+			wantPrompt:  true,
+		},
+		{
+			name:        "tagged repo with multiple non-debug variants lets user pick another variant",
+			withTag:     true,
+			mod:         flavoredMod,
+			current:     flavoredMod.Variants[2],
+			input:       "proRelease\n",
+			wantVariant: "proRelease",
+			wantPkg:     "ir.demo.pro",
 			wantPrompt:  true,
 		},
 		{
@@ -459,6 +469,90 @@ func TestResolveTaggedRepoVariant(t *testing.T) {
 			prompted := strings.Contains(errBuf.String(), "variant instead of")
 			if prompted != tc.wantPrompt {
 				t.Fatalf("got prompted=%v, want %v (stderr=%q)", prompted, tc.wantPrompt, errBuf.String())
+			}
+		})
+	}
+}
+
+func TestSelectInitVariantListsAllVariants(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	multiMod := android.AppModule{
+		Name: ":app",
+		Variants: []android.Variant{
+			{Name: "bazaarDebug", BuildType: android.BuildTypeDebug, Flavors: []string{"bazaar"}, PackageName: "ir.demo.app"},
+			{Name: "bazaarRelease", BuildType: android.BuildTypeRelease, Flavors: []string{"bazaar"}, PackageName: "ir.demo.app"},
+			{Name: "bazaarStaging", BuildType: "staging", Flavors: []string{"bazaar"}, PackageName: "ir.demo.app"},
+			{Name: "playDebug", BuildType: android.BuildTypeDebug, Flavors: []string{"play"}, PackageName: "ir.demo.app"},
+			{Name: "playRelease", BuildType: android.BuildTypeRelease, Flavors: []string{"play"}, PackageName: "ir.demo.app"},
+			{Name: "beta", BuildType: "beta", PackageName: "ir.demo.app.beta"},
+		},
+	}
+
+	tests := []struct {
+		name        string
+		filterPkg   string
+		stdin       string
+		wantVariant string
+		wantPkg     string
+		wantListed  []string
+	}{
+		{
+			name:        "lists all variants even when sharing package name",
+			stdin:       "bazaarStaging\n",
+			wantVariant: "bazaarStaging",
+			wantPkg:     "ir.demo.app",
+			wantListed:  []string{"bazaarRelease", "playRelease", "bazaarStaging", "beta", "bazaarDebug", "playDebug"},
+		},
+		{
+			name:        "selects custom build type by number",
+			stdin:       "4\n",
+			wantVariant: "beta",
+			wantPkg:     "ir.demo.app.beta",
+			wantListed:  []string{"bazaarRelease", "playRelease", "bazaarStaging", "beta"},
+		},
+		{
+			name:        "filters variants when package flag matches multiple variants",
+			filterPkg:   "ir.demo.app",
+			stdin:       "playRelease\n",
+			wantVariant: "playRelease",
+			wantPkg:     "ir.demo.app",
+			wantListed:  []string{"bazaarRelease", "playRelease", "bazaarStaging", "bazaarDebug", "playDebug"},
+		},
+		{
+			name:        "allows custom package entry",
+			stdin:       "__custom__\nir.custom.pkg\n",
+			wantVariant: "",
+			wantPkg:     "ir.custom.pkg",
+			wantListed:  []string{"Enter custom package name..."},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			var outBuf, errBuf bytes.Buffer
+			printer := output.NewPrinter(ctx, strings.NewReader(tc.stdin), &outBuf, &errBuf, output.RuntimeMode{
+				Interactive: true,
+				Format:      output.FormatPlain,
+			})
+
+			gotVar, gotPkg, err := cli.SelectInitVariant(ctx, printer, multiMod, tc.filterPkg)
+			if err != nil {
+				t.Fatalf("select init variant: %v", err)
+			}
+			if gotVar.Name != tc.wantVariant {
+				t.Fatalf("got variant %q, want %q", gotVar.Name, tc.wantVariant)
+			}
+			if gotPkg != tc.wantPkg {
+				t.Fatalf("got package %q, want %q", gotPkg, tc.wantPkg)
+			}
+			promptOut := errBuf.String()
+			for _, label := range tc.wantListed {
+				if !strings.Contains(promptOut, label) {
+					t.Fatalf("expected prompt to list %q, got:\n%s", label, promptOut)
+				}
 			}
 		})
 	}

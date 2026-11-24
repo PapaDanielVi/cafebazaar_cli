@@ -210,3 +210,69 @@ func TestDetectGroovyAndApplyVersionBump(t *testing.T) {
 		t.Fatalf("unexpected updated build.gradle:\n%s", text)
 	}
 }
+
+func TestDetectKotlinDelegatedAndGenericVariants(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	root := t.TempDir()
+	appDir := filepath.Join(root, "app")
+	if err := os.MkdirAll(appDir, 0o755); err != nil {
+		t.Fatalf("mkdir app: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, android.FileSettingsKTS), []byte(`include(":app")`), 0o644); err != nil {
+		t.Fatalf("write settings: %v", err)
+	}
+	kts := `
+plugins {
+    id("com.android.application")
+}
+android {
+    defaultConfig {
+        applicationId = "ir.demo.multi"
+        versionCode = 1
+        versionName = "1.0.0"
+    }
+    buildTypes {
+        val debug by getting {}
+        val release by getting {}
+        val staging by creating {
+            applicationIdSuffix = ".staging"
+        }
+        create<ApplicationBuildType>("beta") {
+            applicationIdSuffix = ".beta"
+        }
+    }
+    flavorDimensions += "store"
+    productFlavors {
+        val bazaar by creating {
+            dimension = "store"
+        }
+        val play by creating {
+            dimension = "store"
+        }
+    }
+}
+`
+	if err := os.WriteFile(filepath.Join(appDir, android.FileBuildKTS), []byte(kts), 0o644); err != nil {
+		t.Fatalf("write build.gradle.kts: %v", err)
+	}
+
+	proj, err := android.DetectProject(ctx, root)
+	if err != nil {
+		t.Fatalf("detect project: %v", err)
+	}
+	mod, ok := proj.PrimaryModule(ctx, "")
+	if !ok {
+		t.Fatal("expected primary module")
+	}
+	// 2 flavors (bazaar, play) x 4 build types (debug, release, staging, beta) = 8 variants.
+	if len(mod.Variants) != 8 {
+		t.Fatalf("got %d variants, want 8: %+v", len(mod.Variants), mod.Variants)
+	}
+	for _, want := range []string{"bazaarRelease", "bazaarStaging", "bazaarBeta", "playRelease", "playStaging", "playBeta"} {
+		if _, err := mod.FindVariant(ctx, want); err != nil {
+			t.Fatalf("expected variant %q to be detected: %v", want, err)
+		}
+	}
+}

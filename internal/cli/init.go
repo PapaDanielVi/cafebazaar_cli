@@ -17,8 +17,9 @@ import (
 )
 
 const (
-	initModeExisting = "existing"
-	initModeNew      = "new"
+	initModeExisting        = "existing"
+	initModeNew             = "new"
+	initCustomPackageOption = "__custom__"
 )
 
 func newInitCmd(ctx context.Context, rt *AppRuntime) *cobra.Command {
@@ -102,8 +103,20 @@ func runInit(ctx context.Context, rt *AppRuntime, opts initOptions) error {
 				}
 				selectedVariant = v
 			} else if opts.PackageName != "" {
-				if v, err := mod.FindVariant(ctx, opts.PackageName); err == nil {
-					selectedVariant = v
+				matching := findVariantsByPackage(ctx, mod, opts.PackageName)
+				switch {
+				case len(matching) > 1 && rt.Printer.Mode.Interactive:
+					pickedVariant, _, err := SelectInitVariant(ctx, rt.Printer, mod, opts.PackageName)
+					if err != nil {
+						return err
+					}
+					selectedVariant = pickedVariant
+				case len(matching) > 0:
+					selectedVariant = matching[0]
+				default:
+					if v, err := mod.FindVariant(ctx, opts.PackageName); err == nil {
+						selectedVariant = v
+					}
 				}
 			}
 		}
@@ -114,16 +127,25 @@ func runInit(ctx context.Context, rt *AppRuntime, opts initOptions) error {
 		pkg = selectedVariant.PackageName
 	}
 	if pkg == "" {
-		chosenPkg, chosenVar, err := promptPackageFromAndroid(ctx, rt)
-		if err != nil {
-			return err
-		}
-		pkg = chosenPkg
-		if selectedVariant.Name == "" && chosenVar != "" {
-			if v, findErr := selectedModule.FindVariant(ctx, chosenVar); findErr == nil {
-				selectedVariant = v
-			} else {
-				selectedVariant.Name = chosenVar
+		if selectedModule.Name != "" && len(selectedModule.Variants) > 0 && rt.Printer.Mode.Interactive {
+			pickedVariant, pickedPkg, err := SelectInitVariant(ctx, rt.Printer, selectedModule, "")
+			if err != nil {
+				return err
+			}
+			selectedVariant = pickedVariant
+			pkg = pickedPkg
+		} else {
+			chosenPkg, chosenVar, err := promptPackageFromAndroid(ctx, rt)
+			if err != nil {
+				return err
+			}
+			pkg = chosenPkg
+			if selectedVariant.Name == "" && chosenVar != "" {
+				if v, findErr := selectedModule.FindVariant(ctx, chosenVar); findErr == nil {
+					selectedVariant = v
+				} else {
+					selectedVariant.Name = chosenVar
+				}
 			}
 		}
 	}
@@ -325,8 +347,99 @@ func submitNewAppDuringInit(
 	return resp.AppToken, nil
 }
 
-// ResolveTaggedRepoVariant prompts the developer to switch from a debug variant to the
-// corresponding release variant when initializing inside a Git repository that already has tags.
+// SelectInitVariant lists all detected Gradle build variants (without collapsing variants
+// that share a package name) so the developer can choose the target variant for bazaar init.
+func SelectInitVariant(
+	ctx context.Context,
+	printer *output.Printer,
+	mod android.AppModule,
+	filterPkg string,
+) (android.Variant, string, error) {
+	if printer == nil {
+		return android.Variant{}, "", errors.New("printer must not be nil")
+	}
+
+	candidates := mod.Variants
+	trimmedPkg := strings.TrimSpace(filterPkg)
+	if trimmedPkg != "" {
+		if matched := findVariantsByPackage(ctx, mod, trimmedPkg); len(matched) > 0 {
+			candidates = matched
+		}
+	}
+
+	ordered := orderVariantsForInit(ctx, candidates)
+	if len(ordered) == 0 {
+		pkg, err := printer.Input(ctx, "Android Package Name", "For example: com.example.myapp", "com.example.myapp", trimmedPkg, false)
+		if err != nil {
+			return android.Variant{}, "", err
+		}
+		if strings.TrimSpace(pkg) == "" {
+			return android.Variant{}, "", errors.New("package name must not be empty")
+		}
+		return android.Variant{}, strings.TrimSpace(pkg), nil
+	}
+
+	opts := make([]output.SelectOption, 0, len(ordered)+1)
+	byName := make(map[string]android.Variant, len(ordered))
+	for _, v := range ordered {
+		byName[v.Name] = v
+		opts = append(opts, output.SelectOption{
+			Label: formatInitVariantLabel(ctx, v),
+			Value: v.Name,
+		})
+	}
+	if trimmedPkg == "" {
+		opts = append(opts, output.SelectOption{
+			Label: "Enter custom package name...",
+			Value: initCustomPackageOption,
+		})
+	}
+
+	title := "Select Target Build Variant"
+	desc := "Detected Gradle buildTypes and productFlavors. Choose the target variant for CafeBazaar releases."
+	if trimmedPkg != "" {
+		title = fmt.Sprintf("Select Target Build Variant for %s", trimmedPkg)
+		desc = "Multiple Gradle build variants share this package name. Choose the default release variant."
+	}
+
+	chosen, err := printer.Select(ctx, title, desc, opts)
+	if err != nil {
+		return android.Variant{}, "", err
+	}
+	if chosen == initCustomPackageOption {
+		pkg, inErr := printer.Input(ctx, "Android Package Name", "For example: com.example.myapp", "com.example.myapp", "", false)
+		if inErr != nil {
+			return android.Variant{}, "", inErr
+		}
+		if strings.TrimSpace(pkg) == "" {
+			return android.Variant{}, "", errors.New("package name must not be empty")
+		}
+		return android.Variant{}, strings.TrimSpace(pkg), nil
+	}
+
+	selected, ok := byName[chosen]
+	if !ok {
+		return android.Variant{}, "", fmt.Errorf("selected variant %q not found", chosen)
+	}
+	pkg := selected.PackageName
+	if pkg == "" {
+		pkg = trimmedPkg
+	}
+	if pkg == "" {
+		var inErr error
+		pkg, inErr = printer.Input(ctx, "Android Package Name", "For example: com.example.myapp", "com.example.myapp", "", false)
+		if inErr != nil {
+			return android.Variant{}, "", inErr
+		}
+		if strings.TrimSpace(pkg) == "" {
+			return android.Variant{}, "", errors.New("package name must not be empty")
+		}
+	}
+	return selected, strings.TrimSpace(pkg), nil
+}
+
+// ResolveTaggedRepoVariant prompts the developer to switch from a debug variant to a
+// non-debug target variant when initializing inside a Git repository that already has tags.
 func ResolveTaggedRepoVariant(
 	ctx context.Context,
 	printer *output.Printer,
@@ -349,62 +462,158 @@ func ResolveTaggedRepoVariant(
 		return current, currentPkg, nil
 	}
 
-	releaseVariant, ok := findMatchingReleaseVariant(ctx, mod, current)
-	if !ok {
+	targets := listReleaseTargetVariants(ctx, mod, current)
+	if len(targets) == 0 {
 		return current, currentPkg, nil
 	}
 
-	desc := fmt.Sprintf(
-		"This Git repository already has tags. Switch default variant from %s to %s for CafeBazaar releases?",
-		current.Name,
-		releaseVariant.Name,
-	)
+	tagNote := "This Git repository already has tags."
 	if repoInfo.LatestTag != "" {
-		desc = fmt.Sprintf(
-			"This Git repository already has tags (latest: %s). Switch default variant from %s to %s for CafeBazaar releases?",
-			repoInfo.LatestTag,
+		tagNote = fmt.Sprintf("This Git repository already has tags (latest: %s).", repoInfo.LatestTag)
+	}
+
+	if len(targets) == 1 {
+		releaseVariant := targets[0]
+		desc := fmt.Sprintf(
+			"%s Switch default variant from %s to %s for CafeBazaar releases?",
+			tagNote,
 			current.Name,
 			releaseVariant.Name,
 		)
+		useRelease, err := printer.Confirm(
+			ctx,
+			fmt.Sprintf("Use %q variant instead of %q?", releaseVariant.Name, current.Name),
+			desc,
+			true,
+		)
+		if err != nil {
+			return current, currentPkg, err
+		}
+		if !useRelease {
+			return current, currentPkg, nil
+		}
+		return applyChosenVariant(ctx, current, releaseVariant, currentPkg), resolveNextPkg(ctx, current, releaseVariant, currentPkg), nil
 	}
 
-	useRelease, err := printer.Confirm(
+	opts := make([]output.SelectOption, 0, len(targets)+1)
+	byName := make(map[string]android.Variant, len(targets))
+	for _, v := range targets {
+		byName[v.Name] = v
+		opts = append(opts, output.SelectOption{
+			Label: formatInitVariantLabel(ctx, v),
+			Value: v.Name,
+		})
+	}
+	opts = append(opts, output.SelectOption{
+		Label: fmt.Sprintf("Keep %s (debug)", current.Name),
+		Value: current.Name,
+	})
+
+	chosen, err := printer.Select(
 		ctx,
-		fmt.Sprintf("Use %q variant instead of %q?", releaseVariant.Name, current.Name),
-		desc,
-		true,
+		fmt.Sprintf("Select target release variant instead of %q", current.Name),
+		fmt.Sprintf("%s Choose which build variant to use for CafeBazaar releases.", tagNote),
+		opts,
 	)
 	if err != nil {
 		return current, currentPkg, err
 	}
-	if !useRelease {
+	if chosen == current.Name {
 		return current, currentPkg, nil
 	}
-
-	nextPkg := currentPkg
-	if releaseVariant.PackageName != "" && (strings.TrimSpace(currentPkg) == "" || currentPkg == current.PackageName) {
-		nextPkg = releaseVariant.PackageName
+	target, ok := byName[chosen]
+	if !ok {
+		return current, currentPkg, nil
 	}
-	return releaseVariant, nextPkg, nil
+	return applyChosenVariant(ctx, current, target, currentPkg), resolveNextPkg(ctx, current, target, currentPkg), nil
 }
 
-func findMatchingReleaseVariant(ctx context.Context, mod android.AppModule, current android.Variant) (android.Variant, bool) {
+func applyChosenVariant(ctx context.Context, current, target android.Variant, currentPkg string) android.Variant {
 	_ = ctx
-	var fallback android.Variant
-	var hasFallback bool
+	_ = current
+	_ = currentPkg
+	return target
+}
+
+func resolveNextPkg(ctx context.Context, current, target android.Variant, currentPkg string) string {
+	_ = ctx
+	if target.PackageName != "" && (strings.TrimSpace(currentPkg) == "" || currentPkg == current.PackageName) {
+		return target.PackageName
+	}
+	return currentPkg
+}
+
+func findVariantsByPackage(ctx context.Context, mod android.AppModule, pkg string) []android.Variant {
+	_ = ctx
+	want := strings.TrimSpace(pkg)
+	if want == "" {
+		return nil
+	}
+	var out []android.Variant
 	for _, v := range mod.Variants {
-		if !strings.EqualFold(v.BuildType, android.BuildTypeRelease) {
-			continue
-		}
-		if slices.Equal(v.Flavors, current.Flavors) {
-			return v, true
-		}
-		if !hasFallback {
-			fallback = v
-			hasFallback = true
+		if v.PackageName == want {
+			out = append(out, v)
 		}
 	}
-	return fallback, hasFallback
+	return out
+}
+
+func orderVariantsForInit(ctx context.Context, variants []android.Variant) []android.Variant {
+	_ = ctx
+	var releaseTier []android.Variant
+	var customTier []android.Variant
+	var debugTier []android.Variant
+	for _, v := range variants {
+		switch {
+		case strings.EqualFold(v.BuildType, android.BuildTypeRelease):
+			releaseTier = append(releaseTier, v)
+		case strings.EqualFold(v.BuildType, android.BuildTypeDebug):
+			debugTier = append(debugTier, v)
+		default:
+			customTier = append(customTier, v)
+		}
+	}
+	ordered := make([]android.Variant, 0, len(variants))
+	ordered = append(ordered, releaseTier...)
+	ordered = append(ordered, customTier...)
+	ordered = append(ordered, debugTier...)
+	return ordered
+}
+
+func listReleaseTargetVariants(ctx context.Context, mod android.AppModule, current android.Variant) []android.Variant {
+	_ = ctx
+	var exactRelease []android.Variant
+	var otherRelease []android.Variant
+	var otherNonDebug []android.Variant
+
+	for _, v := range mod.Variants {
+		if strings.EqualFold(v.BuildType, android.BuildTypeDebug) {
+			continue
+		}
+		if strings.EqualFold(v.BuildType, android.BuildTypeRelease) {
+			if slices.Equal(v.Flavors, current.Flavors) {
+				exactRelease = append(exactRelease, v)
+			} else {
+				otherRelease = append(otherRelease, v)
+			}
+			continue
+		}
+		otherNonDebug = append(otherNonDebug, v)
+	}
+
+	out := make([]android.Variant, 0, len(exactRelease)+len(otherRelease)+len(otherNonDebug))
+	out = append(out, exactRelease...)
+	out = append(out, otherRelease...)
+	out = append(out, otherNonDebug...)
+	return out
+}
+
+func formatInitVariantLabel(ctx context.Context, v android.Variant) string {
+	_ = ctx
+	if v.PackageName != "" {
+		return fmt.Sprintf("%s  ->  %s (buildType: %s)", v.Name, v.PackageName, v.BuildType)
+	}
+	return fmt.Sprintf("%s (buildType: %s)", v.Name, v.BuildType)
 }
 
 func parseKeyValueFlags(ctx context.Context, pairs []string) (map[string]string, error) {
