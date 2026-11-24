@@ -118,33 +118,28 @@ jobs:
             version "${VERSION}"
 
             on_macos do
-              on_intel do
-                sha256 "${SHA_DARWIN_AMD64}"
-                url "https://github.com/PapaDanielVi/cafebazaar_cli/releases/download/v#{version}/bazaar_#{version}_darwin_amd64.tar.gz",
-                  verified: "github.com/PapaDanielVi/cafebazaar_cli"
-              end
               on_arm do
                 sha256 "${SHA_DARWIN_ARM64}"
-                url "https://github.com/PapaDanielVi/cafebazaar_cli/releases/download/v#{version}/bazaar_#{version}_darwin_arm64.tar.gz",
-                  verified: "github.com/PapaDanielVi/cafebazaar_cli"
+                url "https://github.com/PapaDanielVi/cafebazaar_cli/releases/download/v#{version}/bazaar_#{version}_darwin_arm64.tar.gz"
+              end
+              on_intel do
+                sha256 "${SHA_DARWIN_AMD64}"
+                url "https://github.com/PapaDanielVi/cafebazaar_cli/releases/download/v#{version}/bazaar_#{version}_darwin_amd64.tar.gz"
               end
             end
-
             on_linux do
-              on_intel do
-                sha256 "${SHA_LINUX_AMD64}"
-                url "https://github.com/PapaDanielVi/cafebazaar_cli/releases/download/v#{version}/bazaar_#{version}_linux_amd64.tar.gz",
-                  verified: "github.com/PapaDanielVi/cafebazaar_cli"
-              end
               on_arm do
                 sha256 "${SHA_LINUX_ARM64}"
-                url "https://github.com/PapaDanielVi/cafebazaar_cli/releases/download/v#{version}/bazaar_#{version}_linux_arm64.tar.gz",
-                  verified: "github.com/PapaDanielVi/cafebazaar_cli"
+                url "https://github.com/PapaDanielVi/cafebazaar_cli/releases/download/v#{version}/bazaar_#{version}_linux_arm64.tar.gz"
+              end
+              on_intel do
+                sha256 "${SHA_LINUX_AMD64}"
+                url "https://github.com/PapaDanielVi/cafebazaar_cli/releases/download/v#{version}/bazaar_#{version}_linux_amd64.tar.gz"
               end
             end
 
             name "bazaar"
-            desc "CLI for CafeBazaar Android app publishing, Pishkhan releases, AAB/APK uploads, and user reviews"
+            desc "CLI for CafeBazaar Android app publishing, releases, and user reviews"
             homepage "https://github.com/PapaDanielVi/cafebazaar_cli"
 
             livecheck do
@@ -153,13 +148,13 @@ jobs:
 
             binary "bazaar"
 
-            postflight do
-              if OS.mac?
-                system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/bazaar"]
+            postflight_steps do
+              on_macos do
+                run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{staged_path}}/bazaar"], must_succeed: false
               end
             end
 
-            # No zap stanza required
+            zap :not_required
           end
           EOF
 
