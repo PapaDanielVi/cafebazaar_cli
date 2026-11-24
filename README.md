@@ -9,7 +9,6 @@
 [![CI](https://github.com/PapaDanielVi/cafebazaar_cli/actions/workflows/ci.yml/badge.svg)](https://github.com/PapaDanielVi/cafebazaar_cli/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/PapaDanielVi/cafebazaar_cli?color=00B14F)](https://github.com/PapaDanielVi/cafebazaar_cli/releases/latest)
 [![Docker](https://github.com/PapaDanielVi/cafebazaar_cli/actions/workflows/docker.yml/badge.svg)](https://github.com/PapaDanielVi/cafebazaar_cli/pkgs/container/cafebazaar_cli)
-[![Go Report Card](https://goreportcard.com/badge/github.com/PapaDanielVi/cafebazaar_cli)](https://goreportcard.com/report/github.com/PapaDanielVi/cafebazaar_cli)
 [![Go Reference](https://pkg.go.dev/badge/github.com/PapaDanielVi/cafebazaar_cli.svg)](https://pkg.go.dev/github.com/PapaDanielVi/cafebazaar_cli)
 
 [![Go Version](https://img.shields.io/github/go-mod/go-version/PapaDanielVi/cafebazaar_cli?color=00B14F)](go.mod)
@@ -232,18 +231,18 @@ bazaar android bump --bump patch --sync-remote --git-commit --git-tag
 
 Direct 1-to-1 commands for all 10 Pishkhan endpoints on `https://api.pishkhan.cafebazaar.ir`:
 
-| Command | HTTP Method & Endpoint | Notes |
-|---|---|---|
-| `bazaar release create` | `POST /v1/apps/releases/` | Creates an uncommitted draft release |
-| `bazaar release delete` | `DELETE /v1/apps/releases/` | Deletes uncommitted draft (requires confirmation) |
-| `bazaar release upload-apk [file]` | `POST /v1/apps/releases/upload/` | Supports `--arch all\|armeabi-v7a\|arm64-v8a` |
-| `bazaar release upload-aab [file]` | `POST /v1/apps/releases/upload-aab/` | Uploads Android App Bundle (`state=U`) |
-| `bazaar release upload-bin [file]` | `POST /v1/apps/releases/upload-bin/` | Uploads Bundle Signer `.bin` (`state=S`) |
-| `bazaar release bundle-status` | `GET /v1/apps/releases/bundle-status/` | Pass `--watch` to poll every 60s until `D` or `E` |
-| `bazaar release commit` | `POST /v1/apps/releases/commit/` | Submits for review (requires confirmation) |
-| `bazaar release status --only published` | `GET /v1/apps/releases/last-published/` | Live published release |
-| `bazaar release status --only committed` | `GET /v1/apps/releases/last-committed/` | Most recent committed release |
-| `bazaar release status --only uncommitted` | `GET /v1/apps/releases/last-uncommitted/` | Current draft release |
+| Command                                    | HTTP Method & Endpoint                    | Notes                                             |
+| ------------------------------------------ | ----------------------------------------- | ------------------------------------------------- |
+| `bazaar release create`                    | `POST /v1/apps/releases/`                 | Creates an uncommitted draft release              |
+| `bazaar release delete`                    | `DELETE /v1/apps/releases/`               | Deletes uncommitted draft (requires confirmation) |
+| `bazaar release upload-apk [file]`         | `POST /v1/apps/releases/upload/`          | Supports `--arch all\|armeabi-v7a\|arm64-v8a`     |
+| `bazaar release upload-aab [file]`         | `POST /v1/apps/releases/upload-aab/`      | Uploads Android App Bundle (`state=U`)            |
+| `bazaar release upload-bin [file]`         | `POST /v1/apps/releases/upload-bin/`      | Uploads Bundle Signer `.bin` (`state=S`)          |
+| `bazaar release bundle-status`             | `GET /v1/apps/releases/bundle-status/`    | Pass `--watch` to poll every 60s until `D` or `E` |
+| `bazaar release commit`                    | `POST /v1/apps/releases/commit/`          | Submits for review (requires confirmation)        |
+| `bazaar release status --only published`   | `GET /v1/apps/releases/last-published/`   | Live published release                            |
+| `bazaar release status --only committed`   | `GET /v1/apps/releases/last-committed/`   | Most recent committed release                     |
+| `bazaar release status --only uncommitted` | `GET /v1/apps/releases/last-uncommitted/` | Current draft release                             |
 
 Example APK release step by step:
 
@@ -434,38 +433,38 @@ publish_cafebazaar:
 
 ### Environment Variables
 
-| Variable | Description |
-|---|---|
-| `CAFEBAZAAR_PUBLISHER_TOKEN` | Developer-account Nasher token |
-| `CAFEBAZAAR_APP_TOKEN` | Per-app Pishkhan token (bypasses local token store) |
-| `CAFEBAZAAR_APP` | Target registered package name or alias |
-| `CAFEBAZAAR_VARIANT` | Gradle build variant |
-| `CAFEBAZAAR_ARCH` | APK CPU architecture (`all`, `armeabi-v7a`, `arm64-v8a`) |
-| `CAFEBAZAAR_AUTO_PUBLISH` | `true` or `false` for commit/publish |
-| `CAFEBAZAAR_ROLLOUT` | Staged rollout percentage (1 to 100) |
-| `CAFEBAZAAR_CHANGELOG_FA` | Persian release notes |
-| `CAFEBAZAAR_CHANGELOG_EN` | English release notes |
-| `CAFEBAZAAR_DEV_NOTE` | Developer note for CafeBazaar review team |
-| `CAFEBAZAAR_YES` | Bypass confirmation prompts in CI (`1` or `true`) |
-| `BAZAAR_NO_UI` / `BAZAAR_PLAIN` / `CI` | Enable headless plain CLI mode |
-| `BAZAAR_OUTPUT` | Output format (`table`, `plain`, `json`, `yaml`) |
-| `BAZAAR_RTL` | Persian terminal shaping (`auto`, `on`, `off`) |
-| `BAZAAR_NO_KEYRING` | Skip OS keychain and use `0600` credentials file |
-| `BAZAAR_CONFIG` | Custom global `config.yaml` path |
-| `BAZAAR_PROXY` / `CAFEBAZAAR_PROXY` | HTTP, HTTPS, or SOCKS5 proxy URL (or `direct` to bypass system proxy) |
-| `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY` | Standard system proxy fallback when no explicit bazaar proxy is set |
-| `NO_COLOR` | Disable ANSI color output |
+| Variable                                  | Description                                                           |
+| ----------------------------------------- | --------------------------------------------------------------------- |
+| `CAFEBAZAAR_PUBLISHER_TOKEN`              | Developer-account Nasher token                                        |
+| `CAFEBAZAAR_APP_TOKEN`                    | Per-app Pishkhan token (bypasses local token store)                   |
+| `CAFEBAZAAR_APP`                          | Target registered package name or alias                               |
+| `CAFEBAZAAR_VARIANT`                      | Gradle build variant                                                  |
+| `CAFEBAZAAR_ARCH`                         | APK CPU architecture (`all`, `armeabi-v7a`, `arm64-v8a`)              |
+| `CAFEBAZAAR_AUTO_PUBLISH`                 | `true` or `false` for commit/publish                                  |
+| `CAFEBAZAAR_ROLLOUT`                      | Staged rollout percentage (1 to 100)                                  |
+| `CAFEBAZAAR_CHANGELOG_FA`                 | Persian release notes                                                 |
+| `CAFEBAZAAR_CHANGELOG_EN`                 | English release notes                                                 |
+| `CAFEBAZAAR_DEV_NOTE`                     | Developer note for CafeBazaar review team                             |
+| `CAFEBAZAAR_YES`                          | Bypass confirmation prompts in CI (`1` or `true`)                     |
+| `BAZAAR_NO_UI` / `BAZAAR_PLAIN` / `CI`    | Enable headless plain CLI mode                                        |
+| `BAZAAR_OUTPUT`                           | Output format (`table`, `plain`, `json`, `yaml`)                      |
+| `BAZAAR_RTL`                              | Persian terminal shaping (`auto`, `on`, `off`)                        |
+| `BAZAAR_NO_KEYRING`                       | Skip OS keychain and use `0600` credentials file                      |
+| `BAZAAR_CONFIG`                           | Custom global `config.yaml` path                                      |
+| `BAZAAR_PROXY` / `CAFEBAZAAR_PROXY`       | HTTP, HTTPS, or SOCKS5 proxy URL (or `direct` to bypass system proxy) |
+| `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY` | Standard system proxy fallback when no explicit bazaar proxy is set   |
+| `NO_COLOR`                                | Disable ANSI color output                                             |
 
 ### Exit Codes
 
-| Code | Meaning |
-|---|---|
-| `0` | Success |
-| `1` | General runtime error |
-| `2` | Invalid flags or arguments |
-| `3` | Authentication error or uninitialized app |
-| `4` | Dangerous action cancelled or missing `--yes` in CI |
-| `5` | CafeBazaar API error or AAB bundle processing failure |
+| Code | Meaning                                               |
+| ---- | ----------------------------------------------------- |
+| `0`  | Success                                               |
+| `1`  | General runtime error                                 |
+| `2`  | Invalid flags or arguments                            |
+| `3`  | Authentication error or uninitialized app             |
+| `4`  | Dangerous action cancelled or missing `--yes` in CI   |
+| `5`  | CafeBazaar API error or AAB bundle processing failure |
 
 ---
 
