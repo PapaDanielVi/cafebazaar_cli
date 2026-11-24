@@ -27,6 +27,8 @@ func TestGitflowInspectCommitTagAndChangelog(t *testing.T) {
 	runCmd("init")
 	runCmd("config", "user.email", "test@example.com")
 	runCmd("config", "user.name", "Test Dev")
+	runCmd("config", "commit.gpgsign", "false")
+	runCmd("config", "tag.gpgsign", "false")
 
 	f1 := filepath.Join(repoDir, "README.md")
 	if err := os.WriteFile(f1, []byte("hello"), 0o644); err != nil {
@@ -34,6 +36,13 @@ func TestGitflowInspectCommitTagAndChangelog(t *testing.T) {
 	}
 	if err := gitflow.CommitFiles(ctx, repoDir, []string{"README.md"}, "feat: initial commit"); err != nil {
 		t.Fatalf("commit initial: %v", err)
+	}
+	preTagInfo, err := gitflow.Inspect(ctx, repoDir)
+	if err != nil {
+		t.Fatalf("inspect repo before tags: %v", err)
+	}
+	if preTagInfo.HasTags || preTagInfo.LatestTag != "" {
+		t.Fatalf("expected no tags yet, got %+v", preTagInfo)
 	}
 	if err := gitflow.CreateTag(ctx, repoDir, "v1.0.0", "Release 1.0.0"); err != nil {
 		t.Fatalf("create tag: %v", err)
@@ -50,7 +59,7 @@ func TestGitflowInspectCommitTagAndChangelog(t *testing.T) {
 	if err != nil {
 		t.Fatalf("inspect repo: %v", err)
 	}
-	if info.LatestTag != "v1.0.0" || info.Dirty {
+	if !info.HasTags || info.LatestTag != "v1.0.0" || info.Dirty {
 		t.Fatalf("unexpected repo info: %+v", info)
 	}
 

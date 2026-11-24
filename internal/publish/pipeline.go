@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -27,36 +28,39 @@ const (
 
 // Options configures an end-to-end Android release pipeline execution.
 type Options struct {
-	Project         *android.Project
-	Module          android.AppModule
-	Variant         android.Variant
-	PackageName     string
-	PishkhanClient  *pishkhan.Client
-	Printer         *output.Printer
-	DryRun          bool
-	BumpKind        android.BumpKind
-	VersionCode     int
-	VersionName     string
-	BuildArtifact   bool
-	ArtifactKind    string
-	APKPath         string
-	AABPath         string
-	BinPath         string
-	BundleSignerCmd string
-	Architecture    pishkhan.Architecture
-	PollInterval    time.Duration
-	ChangelogFA     string
-	ChangelogEN     string
-	DeveloperNote   string
-	Rollout         int
-	AutoPublish     bool
-	NoCommit        bool
-	ReplaceDraft    bool
-	GitCommit       bool
-	GitTag          bool
-	GitPush         bool
-	TagPrefix       string
-	CommitTemplate  string
+	Project              *android.Project
+	Module               android.AppModule
+	Variant              android.Variant
+	PackageName          string
+	PishkhanClient       *pishkhan.Client
+	Printer              *output.Printer
+	DryRun               bool
+	BumpKind             android.BumpKind
+	VersionCode          int
+	VersionName          string
+	BuildArtifact        bool
+	ArtifactKind         string
+	APKPath              string
+	AABPath              string
+	BinPath              string
+	BundleSignerCmd      string
+	Architecture         pishkhan.Architecture
+	PollInterval         time.Duration
+	ChangelogFA          string
+	ChangelogEN          string
+	DeveloperNote        string
+	Rollout              int
+	RolloutExplicit      bool
+	StagedRolloutEnabled bool
+	AutoPublish          bool
+	AutoPublishExplicit  bool
+	NoCommit             bool
+	ReplaceDraft         bool
+	GitCommit            bool
+	GitTag               bool
+	GitPush              bool
+	TagPrefix            string
+	CommitTemplate       string
 }
 
 // Result records every action taken (or planned during --dry-run) by the pipeline.
@@ -71,6 +75,8 @@ type Result struct {
 	GitCommitMsg string                `json:"git_commit_message,omitempty" yaml:"git_commit_message,omitempty"`
 	GitTagName   string                `json:"git_tag_name,omitempty" yaml:"git_tag_name,omitempty"`
 	BundleState  pishkhan.BundleState  `json:"bundle_state,omitempty" yaml:"bundle_state,omitempty"`
+	Rollout      int                   `json:"rollout,omitempty" yaml:"rollout,omitempty"`
+	AutoPublish  bool                  `json:"auto_publish" yaml:"auto_publish"`
 	Committed    bool                  `json:"committed" yaml:"committed"`
 	Release      *pishkhan.ReleaseInfo `json:"release,omitempty" yaml:"release,omitempty"`
 	Steps        []string              `json:"steps" yaml:"steps"`
@@ -111,6 +117,24 @@ func Run(ctx context.Context, opts Options) (Result, error) {
 
 	maxRemoteCode := highestVersionCode(ctx, publishedResp, committedResp)
 	res.Steps = append(res.Steps, fmt.Sprintf("Checked CafeBazaar status (highest remote versionCode=%d, uncommitted=%v)", maxRemoteCode, uncommittedResp.Exists))
+
+	rollout, rolloutNote, err := resolvePublishRollout(ctx, opts, publishedResp, committedResp, uncommittedResp)
+	if err != nil {
+		return res, err
+	}
+	if rolloutNote != "" {
+		res.Steps = append(res.Steps, rolloutNote)
+	}
+	res.Rollout = rollout
+
+	autoPublish, autoPublishNote, err := resolveAutoPublish(ctx, opts)
+	if err != nil {
+		return res, err
+	}
+	if autoPublishNote != "" {
+		res.Steps = append(res.Steps, autoPublishNote)
+	}
+	res.AutoPublish = autoPublish
 
 	// Step 2: Optional Gradle version bump.
 	activeVersionCode := opts.Module.VersionCode
@@ -190,7 +214,7 @@ func Run(ctx context.Context, opts Options) (Result, error) {
 			res.Steps = append(res.Steps, fmt.Sprintf("Upload APK %s (arch=%s) (dry-run)", apkPath, effectiveArch(ctx, opts.Architecture)))
 		}
 		if !opts.NoCommit {
-			res.Steps = append(res.Steps, fmt.Sprintf("Commit release (rollout=%d%%, auto_publish=%v) (dry-run)", effectiveRollout(ctx, opts.Rollout), opts.AutoPublish))
+			res.Steps = append(res.Steps, fmt.Sprintf("Commit release (rollout=%d%%, auto_publish=%v) (dry-run)", rollout, autoPublish))
 		}
 		return res, nil
 	}
@@ -282,9 +306,8 @@ func Run(ctx context.Context, opts Options) (Result, error) {
 		return res, nil
 	}
 
-	rollout := effectiveRollout(ctx, opts.Rollout)
 	warning := "This submits the release to CafeBazaar for review."
-	if opts.AutoPublish {
+	if autoPublish {
 		warning = "AUTO-PUBLISH IS ENABLED: this release will go live to users automatically once approved by CafeBazaar."
 	}
 	if _, err := opts.Printer.ConfirmDangerousAction(ctx, output.ConfirmRequest{
@@ -294,7 +317,7 @@ func Run(ctx context.Context, opts Options) (Result, error) {
 		Details: []output.KeyValue{
 			{Key: "Artifact", Value: filepath.Base(res.ArtifactPath)},
 			{Key: "Rollout", Value: fmt.Sprintf("%d%%", rollout)},
-			{Key: "Auto Publish", Value: fmt.Sprintf("%v", opts.AutoPublish)},
+			{Key: "Auto Publish", Value: fmt.Sprintf("%v", autoPublish)},
 			{Key: "Changelog (FA)", Value: output.TruncateRunes(ctx, opts.ChangelogFA, 60)},
 			{Key: "Changelog (EN)", Value: output.TruncateRunes(ctx, opts.ChangelogEN, 60)},
 		},
@@ -311,7 +334,7 @@ func Run(ctx context.Context, opts Options) (Result, error) {
 			ChangelogFA:             opts.ChangelogFA,
 			DeveloperNote:           opts.DeveloperNote,
 			StagedRolloutPercentage: rollout,
-			AutoPublish:             opts.AutoPublish,
+			AutoPublish:             autoPublish,
 		})
 		return callErr
 	}); err != nil {
@@ -472,6 +495,139 @@ func effectiveArch(ctx context.Context, arch pishkhan.Architecture) pishkhan.Arc
 		return pishkhan.ArchitectureAll
 	}
 	return arch
+}
+
+func resolveAutoPublish(ctx context.Context, opts Options) (bool, string, error) {
+	if opts.AutoPublishExplicit || opts.NoCommit || opts.DryRun || !opts.Printer.Mode.Interactive {
+		return opts.AutoPublish, "", nil
+	}
+
+	enabled, err := opts.Printer.Confirm(
+		ctx,
+		"Enable auto-publish after CafeBazaar approval?",
+		"When enabled, CafeBazaar publishes this release automatically once approved instead of waiting for manual publish in Pishkhan.",
+		false,
+	)
+	if err != nil {
+		return false, "", err
+	}
+	if enabled {
+		return true, "Enabled auto-publish after CafeBazaar approval", nil
+	}
+	return false, "Disabled auto-publish (manual publish after CafeBazaar approval)", nil
+}
+
+func resolvePublishRollout(
+	ctx context.Context,
+	opts Options,
+	published pishkhan.ReleaseResponse,
+	committed pishkhan.ReleaseResponse,
+	uncommitted pishkhan.ReleaseResponse,
+) (int, string, error) {
+	if opts.RolloutExplicit {
+		if opts.Rollout < pishkhan.MinRolloutPercentage || opts.Rollout > pishkhan.MaxRolloutPercentage {
+			return 0, "", pishkhan.ErrInvalidRollout
+		}
+		return opts.Rollout, "", nil
+	}
+
+	rollout := effectiveRollout(ctx, opts.Rollout)
+	if opts.NoCommit {
+		return rollout, "", nil
+	}
+
+	detectedPct, source, detected := detectStagedRollout(ctx, published, committed, uncommitted)
+	if !detected && !opts.StagedRolloutEnabled {
+		return rollout, "", nil
+	}
+
+	if opts.DryRun {
+		if detected {
+			return rollout, fmt.Sprintf("Detected active staged rollout on CafeBazaar (%d%% on %s release); interactive publish will ask for 100%% or a custom percentage", detectedPct, source), nil
+		}
+		return rollout, "Staged rollout is enabled for this app; interactive publish will ask for 100% or a custom percentage", nil
+	}
+
+	if !opts.Printer.Mode.Interactive {
+		if detected {
+			if err := opts.Printer.PrintWarning(ctx, fmt.Sprintf("Staged rollout (%d%% on %s release) is active on CafeBazaar; using %d%% in non-interactive mode (pass --rollout to override).", detectedPct, source, rollout)); err != nil {
+				return 0, "", err
+			}
+		}
+		return rollout, "", nil
+	}
+
+	statusMsg := fmt.Sprintf("Staged rollout (A/B testing) is enabled for %s on CafeBazaar.", opts.PackageName)
+	if detected {
+		statusMsg = fmt.Sprintf("Staged rollout (A/B testing) is active for %s on CafeBazaar (%d%% on %s release).", opts.PackageName, detectedPct, source)
+	}
+	if err := opts.Printer.PrintInfo(ctx, statusMsg); err != nil {
+		return 0, "", err
+	}
+
+	useFull, err := opts.Printer.Confirm(
+		ctx,
+		"Roll out this release to 100% of users?",
+		"Choose Yes for a full 100% rollout, or No to enter a custom staged rollout percentage (1 to 100).",
+		true,
+	)
+	if err != nil {
+		return 0, "", err
+	}
+	if useFull {
+		return pishkhan.MaxRolloutPercentage, "Selected full 100% rollout (staged rollout active on CafeBazaar)", nil
+	}
+
+	defaultVal := ""
+	if detected {
+		defaultVal = strconv.Itoa(detectedPct)
+	} else if opts.Rollout >= pishkhan.MinRolloutPercentage && opts.Rollout < pishkhan.MaxRolloutPercentage {
+		defaultVal = strconv.Itoa(opts.Rollout)
+	}
+
+	rawPct, err := opts.Printer.Input(
+		ctx,
+		"Staged Rollout Percentage (1 to 100)",
+		"Enter the percentage of CafeBazaar users who should receive this release.",
+		"e.g. 20",
+		defaultVal,
+		false,
+	)
+	if err != nil {
+		return 0, "", err
+	}
+	parsed, err := strconv.Atoi(strings.TrimSpace(rawPct))
+	if err != nil || parsed < pishkhan.MinRolloutPercentage || parsed > pishkhan.MaxRolloutPercentage {
+		return 0, "", fmt.Errorf("%w: got %q", pishkhan.ErrInvalidRollout, rawPct)
+	}
+	return parsed, fmt.Sprintf("Selected custom staged rollout percentage: %d%%", parsed), nil
+}
+
+func detectStagedRollout(
+	ctx context.Context,
+	published pishkhan.ReleaseResponse,
+	committed pishkhan.ReleaseResponse,
+	uncommitted pishkhan.ReleaseResponse,
+) (int, string, bool) {
+	_ = ctx
+	candidates := []struct {
+		source string
+		resp   pishkhan.ReleaseResponse
+	}{
+		{source: "published", resp: published},
+		{source: "committed", resp: committed},
+		{source: "uncommitted", resp: uncommitted},
+	}
+	for _, c := range candidates {
+		if !c.resp.Exists || c.resp.Release == nil {
+			continue
+		}
+		pct := c.resp.Release.StagedRolloutPercentage
+		if pct >= pishkhan.MinRolloutPercentage && pct < pishkhan.MaxRolloutPercentage {
+			return pct, c.source, true
+		}
+	}
+	return 0, "", false
 }
 
 func effectiveRollout(ctx context.Context, rollout int) int {

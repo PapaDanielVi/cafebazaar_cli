@@ -27,15 +27,22 @@ func newStatusCmd(ctx context.Context, rt *AppRuntime) *cobra.Command {
 	return cmd
 }
 
+type stagedRolloutSummary struct {
+	Percentage int    `json:"percentage" yaml:"percentage"`
+	Source     string `json:"source" yaml:"source"`
+	Active     bool   `json:"active" yaml:"active"`
+}
+
 type statusSummary struct {
-	PackageName string                   `json:"package_name" yaml:"package_name"`
-	ResolvedBy  string                   `json:"resolved_by" yaml:"resolved_by"`
-	LocalModule *android.AppModule       `json:"local_module,omitempty" yaml:"local_module,omitempty"`
-	Git         *gitflow.RepoInfo        `json:"git,omitempty" yaml:"git,omitempty"`
-	Published   pishkhan.ReleaseResponse `json:"published" yaml:"published"`
-	Committed   pishkhan.ReleaseResponse `json:"committed" yaml:"committed"`
-	Uncommitted pishkhan.ReleaseResponse `json:"uncommitted" yaml:"uncommitted"`
-	Bundle      *pishkhan.BundleInfo     `json:"bundle,omitempty" yaml:"bundle,omitempty"`
+	PackageName   string                   `json:"package_name" yaml:"package_name"`
+	ResolvedBy    string                   `json:"resolved_by" yaml:"resolved_by"`
+	LocalModule   *android.AppModule       `json:"local_module,omitempty" yaml:"local_module,omitempty"`
+	Git           *gitflow.RepoInfo        `json:"git,omitempty" yaml:"git,omitempty"`
+	StagedRollout *stagedRolloutSummary    `json:"staged_rollout,omitempty" yaml:"staged_rollout,omitempty"`
+	Published     pishkhan.ReleaseResponse `json:"published" yaml:"published"`
+	Committed     pishkhan.ReleaseResponse `json:"committed" yaml:"committed"`
+	Uncommitted   pishkhan.ReleaseResponse `json:"uncommitted" yaml:"uncommitted"`
+	Bundle        *pishkhan.BundleInfo     `json:"bundle,omitempty" yaml:"bundle,omitempty"`
 }
 
 func runUnifiedStatus(ctx context.Context, rt *AppRuntime, variant string) error {
@@ -84,6 +91,8 @@ func runUnifiedStatus(ctx context.Context, rt *AppRuntime, variant string) error
 		return err
 	}
 
+	summary.StagedRollout = summarizeStagedRollout(ctx, summary.Published, summary.Committed, summary.Uncommitted)
+
 	if printed, err := rt.Printer.PrintStructured(ctx, summary); printed || err != nil {
 		return err
 	}
@@ -107,6 +116,14 @@ func runUnifiedStatus(ctx context.Context, rt *AppRuntime, variant string) error
 			gitVal += fmt.Sprintf(" [%d dirty]", summary.Git.DirtyCount)
 		}
 		items = append(items, output.KeyValue{Key: "Git", Value: gitVal})
+	}
+
+	if summary.StagedRollout != nil {
+		rolloutVal := fmt.Sprintf("%d%% (full rollout, %s)", summary.StagedRollout.Percentage, summary.StagedRollout.Source)
+		if summary.StagedRollout.Active {
+			rolloutVal = fmt.Sprintf("%s %d%% (%s release)", rt.Printer.Theme.RenderBadge(ctx, "STAGED"), summary.StagedRollout.Percentage, summary.StagedRollout.Source)
+		}
+		items = append(items, output.KeyValue{Key: "Rollout", Value: rolloutVal})
 	}
 
 	items = append(items,
@@ -151,4 +168,48 @@ func formatReleaseSummary(ctx context.Context, p *output.Printer, badge string, 
 		}
 	}
 	return summary
+}
+
+func summarizeStagedRollout(
+	ctx context.Context,
+	published pishkhan.ReleaseResponse,
+	committed pishkhan.ReleaseResponse,
+	uncommitted pishkhan.ReleaseResponse,
+) *stagedRolloutSummary {
+	_ = ctx
+	candidates := []struct {
+		source string
+		resp   pishkhan.ReleaseResponse
+	}{
+		{source: "published", resp: published},
+		{source: "committed", resp: committed},
+		{source: "uncommitted", resp: uncommitted},
+	}
+	for _, c := range candidates {
+		if !c.resp.Exists || c.resp.Release == nil {
+			continue
+		}
+		pct := c.resp.Release.StagedRolloutPercentage
+		if pct >= pishkhan.MinRolloutPercentage && pct < pishkhan.MaxRolloutPercentage {
+			return &stagedRolloutSummary{
+				Percentage: pct,
+				Source:     c.source,
+				Active:     true,
+			}
+		}
+	}
+	for _, c := range candidates[:2] {
+		if !c.resp.Exists || c.resp.Release == nil {
+			continue
+		}
+		pct := c.resp.Release.StagedRolloutPercentage
+		if pct >= pishkhan.MinRolloutPercentage {
+			return &stagedRolloutSummary{
+				Percentage: pct,
+				Source:     c.source,
+				Active:     false,
+			}
+		}
+	}
+	return nil
 }

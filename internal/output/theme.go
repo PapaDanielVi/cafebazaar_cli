@@ -121,7 +121,7 @@ func (t Theme) RenderBadge(ctx context.Context, status string) string {
 		return t.BadgeGreen.Render(upper)
 	case "COMMITTED", "PROCESSING", "SIGNED", "UPLOADED", "PENDING":
 		return t.BadgeBlue.Render(upper)
-	case "UNCOMMITTED", "DRAFT", "UNREPLIED", "WARNING":
+	case "UNCOMMITTED", "DRAFT", "UNREPLIED", "WARNING", "STAGED":
 		return t.BadgeAmber.Render(upper)
 	case "ERROR", "FAILED", "MISSING", "DANGER":
 		return t.BadgeRed.Render(upper)

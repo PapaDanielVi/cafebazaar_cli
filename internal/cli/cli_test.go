@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -19,6 +20,7 @@ import (
 	"github.com/PapaDanielVi/cafebazaar_cli/internal/auth"
 	"github.com/PapaDanielVi/cafebazaar_cli/internal/cli"
 	"github.com/PapaDanielVi/cafebazaar_cli/internal/config"
+	"github.com/PapaDanielVi/cafebazaar_cli/internal/gitflow"
 	"github.com/PapaDanielVi/cafebazaar_cli/internal/output"
 )
 
@@ -316,5 +318,210 @@ func TestCLIProxyFlagRoutesRequestsThroughProxy(t *testing.T) {
 	}
 	if !strings.Contains(outBuf.String(), `"version_code": 21`) {
 		t.Fatalf("unexpected proxied output: %s", outBuf.String())
+	}
+}
+
+func TestResolveTaggedRepoVariant(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	initGitRepo := func(t *testing.T, withTag bool) string {
+		t.Helper()
+		dir := t.TempDir()
+		runGit := func(args ...string) {
+			t.Helper()
+			cmd := exec.CommandContext(ctx, "git", args...)
+			cmd.Dir = dir
+			if out, err := cmd.CombinedOutput(); err != nil {
+				t.Fatalf("git %v: %v (%s)", args, err, string(out))
+			}
+		}
+		runGit("init")
+		runGit("config", "user.email", "dev@example.com")
+		runGit("config", "user.name", "Dev")
+		runGit("config", "commit.gpgsign", "false")
+		runGit("config", "tag.gpgsign", "false")
+		if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte("demo"), 0o644); err != nil {
+			t.Fatalf("write readme: %v", err)
+		}
+		if err := gitflow.CommitFiles(ctx, dir, []string{"README.md"}, "chore: init"); err != nil {
+			t.Fatalf("commit readme: %v", err)
+		}
+		if withTag {
+			if err := gitflow.CreateTag(ctx, dir, "v1.2.0", "Release 1.2.0"); err != nil {
+				t.Fatalf("create tag: %v", err)
+			}
+		}
+		return dir
+	}
+
+	baseMod := android.AppModule{
+		Name: ":app",
+		Variants: []android.Variant{
+			{Name: "debug", BuildType: android.BuildTypeDebug, PackageName: "ir.demo.shop.debug"},
+			{Name: "release", BuildType: android.BuildTypeRelease, PackageName: "ir.demo.shop"},
+		},
+	}
+	flavoredMod := android.AppModule{
+		Name: ":app",
+		Variants: []android.Variant{
+			{Name: "proDebug", BuildType: android.BuildTypeDebug, Flavors: []string{"pro"}, PackageName: "ir.demo.pro.debug"},
+			{Name: "proRelease", BuildType: android.BuildTypeRelease, Flavors: []string{"pro"}, PackageName: "ir.demo.pro"},
+			{Name: "freeDebug", BuildType: android.BuildTypeDebug, Flavors: []string{"free"}, PackageName: "ir.demo.free.debug"},
+			{Name: "freeRelease", BuildType: android.BuildTypeRelease, Flavors: []string{"free"}, PackageName: "ir.demo.free"},
+		},
+	}
+
+	tests := []struct {
+		name            string
+		withTag         bool
+		mod             android.AppModule
+		current         android.Variant
+		explicitVariant string
+		input           string
+		wantVariant     string
+		wantPkg         string
+		wantPrompt      bool
+	}{
+		{
+			name:        "tagged repo accepts switching debug to release",
+			withTag:     true,
+			mod:         baseMod,
+			current:     baseMod.Variants[0],
+			input:       "y\n",
+			wantVariant: "release",
+			wantPkg:     "ir.demo.shop",
+			wantPrompt:  true,
+		},
+		{
+			name:        "tagged repo declines switching keeps debug",
+			withTag:     true,
+			mod:         baseMod,
+			current:     baseMod.Variants[0],
+			input:       "n\n",
+			wantVariant: "debug",
+			wantPkg:     "ir.demo.shop.debug",
+			wantPrompt:  true,
+		},
+		{
+			name:        "tagged repo matches flavored release variant",
+			withTag:     true,
+			mod:         flavoredMod,
+			current:     flavoredMod.Variants[2],
+			input:       "y\n",
+			wantVariant: "freeRelease",
+			wantPkg:     "ir.demo.free",
+			wantPrompt:  true,
+		},
+		{
+			name:        "untagged repo skips prompt",
+			withTag:     false,
+			mod:         baseMod,
+			current:     baseMod.Variants[0],
+			input:       "y\n",
+			wantVariant: "debug",
+			wantPkg:     "ir.demo.shop.debug",
+			wantPrompt:  false,
+		},
+		{
+			name:            "explicit variant flag skips prompt",
+			withTag:         true,
+			mod:             baseMod,
+			current:         baseMod.Variants[0],
+			explicitVariant: "debug",
+			input:           "y\n",
+			wantVariant:     "debug",
+			wantPkg:         "ir.demo.shop.debug",
+			wantPrompt:      false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			repoDir := initGitRepo(t, tc.withTag)
+			var outBuf, errBuf bytes.Buffer
+			printer := output.NewPrinter(ctx, strings.NewReader(tc.input), &outBuf, &errBuf, output.RuntimeMode{
+				Interactive: true,
+				Format:      output.FormatPlain,
+			})
+
+			gotVariant, gotPkg, err := cli.ResolveTaggedRepoVariant(ctx, printer, repoDir, tc.mod, tc.current, tc.explicitVariant, tc.current.PackageName)
+			if err != nil {
+				t.Fatalf("resolve tagged repo variant: %v", err)
+			}
+			if gotVariant.Name != tc.wantVariant {
+				t.Fatalf("got variant %q, want %q", gotVariant.Name, tc.wantVariant)
+			}
+			if gotPkg != tc.wantPkg {
+				t.Fatalf("got package %q, want %q", gotPkg, tc.wantPkg)
+			}
+			prompted := strings.Contains(errBuf.String(), "variant instead of")
+			if prompted != tc.wantPrompt {
+				t.Fatalf("got prompted=%v, want %v (stderr=%q)", prompted, tc.wantPrompt, errBuf.String())
+			}
+		})
+	}
+}
+
+func TestStatusShowsCurrentRolloutPercentage(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	pishkhanSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == pishkhan.EndpointLastPublished:
+			w.WriteHeader(http.StatusOK)
+			writeTestResponse(ctx, t, w, `{"type":"success","release":{"packages":[{"version_code":21,"version_name":"2.1.0"}],"staged_rollout_percentage":25,"auto_publish":true}}`)
+		case r.Method == http.MethodGet && r.URL.Path == pishkhan.EndpointLastCommitted:
+			w.WriteHeader(http.StatusOK)
+			writeTestResponse(ctx, t, w, `{"type":"not-exists"}`)
+		case r.Method == http.MethodGet && r.URL.Path == pishkhan.EndpointLastUncommitted:
+			w.WriteHeader(http.StatusOK)
+			writeTestResponse(ctx, t, w, `{"type":"not-exists"}`)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer pishkhanSrv.Close()
+
+	cfgPath := filepath.Join(t.TempDir(), "config.yaml")
+	runStatus := func(args ...string) string {
+		t.Helper()
+		var outBuf, errBuf bytes.Buffer
+		cmd := cli.NewRootCmd(ctx, cli.Dependencies{
+			In:              strings.NewReader(""),
+			Out:             &outBuf,
+			Err:             &errBuf,
+			WorkDir:         t.TempDir(),
+			PishkhanBaseURL: pishkhanSrv.URL,
+			LookupEnv: func(key string) (string, bool) {
+				switch key {
+				case config.EnvConfig:
+					return cfgPath, true
+				case config.EnvAppToken:
+					return "ci-app-token", true
+				case config.EnvCI:
+					return "1", true
+				default:
+					return "", false
+				}
+			},
+		})
+		cmd.SetArgs(args)
+		if err := cmd.ExecuteContext(ctx); err != nil {
+			t.Fatalf("status %v failed: %v", args, err)
+		}
+		return outBuf.String()
+	}
+
+	plainOut := runStatus("status", "--plain")
+	if !strings.Contains(plainOut, "Rollout: [STAGED] 25% (published release)") {
+		t.Fatalf("expected plain status output to include staged rollout row, got:\n%s", plainOut)
+	}
+
+	jsonOut := runStatus("status", "--output", "json")
+	if !strings.Contains(jsonOut, `"percentage": 25`) || !strings.Contains(jsonOut, `"active": true`) {
+		t.Fatalf("expected json status output to include staged_rollout summary, got:\n%s", jsonOut)
 	}
 }

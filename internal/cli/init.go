@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/PapaDanielVi/cafebazaar_cli/internal/android"
 	"github.com/PapaDanielVi/cafebazaar_cli/internal/api/publisher"
 	"github.com/PapaDanielVi/cafebazaar_cli/internal/auth"
 	"github.com/PapaDanielVi/cafebazaar_cli/internal/config"
+	"github.com/PapaDanielVi/cafebazaar_cli/internal/gitflow"
 	"github.com/PapaDanielVi/cafebazaar_cli/internal/output"
 	"github.com/spf13/cobra"
 )
@@ -118,7 +120,19 @@ func runInit(ctx context.Context, rt *AppRuntime, opts initOptions) error {
 		}
 		pkg = chosenPkg
 		if selectedVariant.Name == "" && chosenVar != "" {
-			selectedVariant.Name = chosenVar
+			if v, findErr := selectedModule.FindVariant(ctx, chosenVar); findErr == nil {
+				selectedVariant = v
+			} else {
+				selectedVariant.Name = chosenVar
+			}
+		}
+	}
+
+	if selectedModule.Name != "" {
+		var err error
+		selectedVariant, pkg, err = ResolveTaggedRepoVariant(ctx, rt.Printer, projectDir, selectedModule, selectedVariant, opts.Variant, pkg)
+		if err != nil {
+			return err
 		}
 	}
 
@@ -309,6 +323,88 @@ func submitNewAppDuringInit(
 		}
 	}
 	return resp.AppToken, nil
+}
+
+// ResolveTaggedRepoVariant prompts the developer to switch from a debug variant to the
+// corresponding release variant when initializing inside a Git repository that already has tags.
+func ResolveTaggedRepoVariant(
+	ctx context.Context,
+	printer *output.Printer,
+	projectDir string,
+	mod android.AppModule,
+	current android.Variant,
+	explicitVariant string,
+	currentPkg string,
+) (android.Variant, string, error) {
+	if strings.TrimSpace(explicitVariant) != "" || printer == nil || !printer.Mode.Interactive {
+		return current, currentPkg, nil
+	}
+	if !strings.EqualFold(current.BuildType, android.BuildTypeDebug) {
+		return current, currentPkg, nil
+	}
+
+	repoInfo, gitErr := gitflow.Inspect(ctx, projectDir)
+	if gitErr != nil || !repoInfo.HasTags {
+		//nolint:nilerr // Non-Git folders simply skip the tagged-repo release variant prompt.
+		return current, currentPkg, nil
+	}
+
+	releaseVariant, ok := findMatchingReleaseVariant(ctx, mod, current)
+	if !ok {
+		return current, currentPkg, nil
+	}
+
+	desc := fmt.Sprintf(
+		"This Git repository already has tags. Switch default variant from %s to %s for CafeBazaar releases?",
+		current.Name,
+		releaseVariant.Name,
+	)
+	if repoInfo.LatestTag != "" {
+		desc = fmt.Sprintf(
+			"This Git repository already has tags (latest: %s). Switch default variant from %s to %s for CafeBazaar releases?",
+			repoInfo.LatestTag,
+			current.Name,
+			releaseVariant.Name,
+		)
+	}
+
+	useRelease, err := printer.Confirm(
+		ctx,
+		fmt.Sprintf("Use %q variant instead of %q?", releaseVariant.Name, current.Name),
+		desc,
+		true,
+	)
+	if err != nil {
+		return current, currentPkg, err
+	}
+	if !useRelease {
+		return current, currentPkg, nil
+	}
+
+	nextPkg := currentPkg
+	if releaseVariant.PackageName != "" && (strings.TrimSpace(currentPkg) == "" || currentPkg == current.PackageName) {
+		nextPkg = releaseVariant.PackageName
+	}
+	return releaseVariant, nextPkg, nil
+}
+
+func findMatchingReleaseVariant(ctx context.Context, mod android.AppModule, current android.Variant) (android.Variant, bool) {
+	_ = ctx
+	var fallback android.Variant
+	var hasFallback bool
+	for _, v := range mod.Variants {
+		if !strings.EqualFold(v.BuildType, android.BuildTypeRelease) {
+			continue
+		}
+		if slices.Equal(v.Flavors, current.Flavors) {
+			return v, true
+		}
+		if !hasFallback {
+			fallback = v
+			hasFallback = true
+		}
+	}
+	return fallback, hasFallback
 }
 
 func parseKeyValueFlags(ctx context.Context, pairs []string) (map[string]string, error) {

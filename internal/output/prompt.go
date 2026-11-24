@@ -53,6 +53,11 @@ func (p *Printer) Input(ctx context.Context, title, description, placeholder, de
 		return "", ErrNonInteractive
 	}
 
+	// Use simple line reading when In is not a real TTY (for deterministic tests).
+	if !isTerminalReader(ctx, p.In) {
+		return p.promptLineInput(ctx, title, defaultValue)
+	}
+
 	value := defaultValue
 	field := huh.NewInput().
 		Title(p.Text(ctx, title)).
@@ -105,7 +110,7 @@ func (p *Printer) Confirm(ctx context.Context, title, description string, defaul
 
 	// Use simple line reading when In is not a real TTY (for deterministic tests).
 	if !isTerminalReader(ctx, p.In) {
-		return promptLineConfirm(ctx, p.In, p.Err, title, defaultYes)
+		return p.promptLineConfirm(ctx, title, defaultYes)
 	}
 
 	confirmed := defaultYes
@@ -127,7 +132,40 @@ func (p *Printer) Confirm(ctx context.Context, title, description string, defaul
 	return confirmed, nil
 }
 
-func promptLineConfirm(ctx context.Context, in interface{ Read([]byte) (int, error) }, errOut interface{ Write([]byte) (int, error) }, title string, defaultYes bool) (bool, error) {
+func (p *Printer) readLine(ctx context.Context) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", fmt.Errorf("prompt cancelled: %w", err)
+	}
+	if p.lineReader == nil {
+		p.lineReader = bufio.NewReader(p.In)
+	}
+	line, err := p.lineReader.ReadString('\n')
+	return line, err
+}
+
+func (p *Printer) promptLineInput(ctx context.Context, title, defaultValue string) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", fmt.Errorf("input cancelled: %w", err)
+	}
+	promptText := title
+	if strings.TrimSpace(defaultValue) != "" {
+		promptText = fmt.Sprintf("%s [%s]", title, defaultValue)
+	}
+	if _, err := fmt.Fprintf(p.Err, "%s: ", promptText); err != nil {
+		return "", fmt.Errorf("write input prompt: %w", err)
+	}
+	line, err := p.readLine(ctx)
+	if err != nil && len(line) == 0 {
+		return strings.TrimSpace(defaultValue), nil
+	}
+	trimmed := strings.TrimSpace(line)
+	if trimmed == "" {
+		return strings.TrimSpace(defaultValue), nil
+	}
+	return trimmed, nil
+}
+
+func (p *Printer) promptLineConfirm(ctx context.Context, title string, defaultYes bool) (bool, error) {
 	if err := ctx.Err(); err != nil {
 		return false, fmt.Errorf("confirm cancelled: %w", err)
 	}
@@ -135,11 +173,10 @@ func promptLineConfirm(ctx context.Context, in interface{ Read([]byte) (int, err
 	if defaultYes {
 		hint = "[Y/n]"
 	}
-	if _, err := fmt.Fprintf(errOut, "%s %s: ", title, hint); err != nil {
+	if _, err := fmt.Fprintf(p.Err, "%s %s: ", title, hint); err != nil {
 		return false, fmt.Errorf("write confirmation prompt: %w", err)
 	}
-	reader := bufio.NewReader(in)
-	line, err := reader.ReadString('\n')
+	line, err := p.readLine(ctx)
 	if err != nil && len(line) == 0 {
 		return defaultYes, nil
 	}

@@ -24,6 +24,7 @@ type RepoInfo struct {
 	RootDir    string `json:"root_dir" yaml:"root_dir"`
 	Branch     string `json:"branch" yaml:"branch"`
 	LatestTag  string `json:"latest_tag,omitempty" yaml:"latest_tag,omitempty"`
+	HasTags    bool   `json:"has_tags" yaml:"has_tags"`
 	Dirty      bool   `json:"dirty" yaml:"dirty"`
 	DirtyCount int    `json:"dirty_count" yaml:"dirty_count"`
 }
@@ -44,6 +45,15 @@ func Inspect(ctx context.Context, dir string) (RepoInfo, error) {
 	if tagErr != nil {
 		latestTag = ""
 	}
+	hasTags := latestTag != ""
+	if !hasTags {
+		if tagsOut, listErr := runGit(ctx, dir, "tag", "--sort=-creatordate"); listErr == nil && tagsOut != "" {
+			hasTags = true
+			if first, _, _ := strings.Cut(tagsOut, "\n"); strings.TrimSpace(first) != "" {
+				latestTag = strings.TrimSpace(first)
+			}
+		}
+	}
 
 	statusOut, err := runGit(ctx, dir, "status", "--porcelain")
 	if err != nil {
@@ -58,6 +68,7 @@ func Inspect(ctx context.Context, dir string) (RepoInfo, error) {
 		RootDir:    root,
 		Branch:     branch,
 		LatestTag:  latestTag,
+		HasTags:    hasTags,
 		Dirty:      dirtyCount > 0,
 		DirtyCount: dirtyCount,
 	}, nil

@@ -62,6 +62,7 @@ func newPublishCmd(ctx context.Context, rt *AppRuntime) *cobra.Command {
 				ChangelogENFile: changelogENFile,
 				DevNote:         devNote,
 				Rollout:         rollout,
+				RolloutSet:      c.Flags().Changed("rollout"),
 				AutoPublish:     autoPublish,
 				AutoPublishSet:  c.Flags().Changed("auto-publish"),
 				NoCommit:        noCommit,
@@ -127,6 +128,7 @@ type publishCmdFlags struct {
 	ChangelogENFile string
 	DevNote         string
 	Rollout         int
+	RolloutSet      bool
 	AutoPublish     bool
 	AutoPublishSet  bool
 	NoCommit        bool
@@ -226,18 +228,26 @@ func runPublishCmd(ctx context.Context, rt *AppRuntime, f publishCmdFlags) error
 		arch = rt.Env.Arch
 	}
 	rollout := f.Rollout
+	rolloutExplicit := f.RolloutSet
 	if rollout == 0 && rt.Env.Rollout > 0 {
 		rollout = rt.Env.Rollout
+		rolloutExplicit = true
 	}
 	if rollout == 0 && rt.Project != nil && rt.Project.StagedRollout > 0 {
 		rollout = rt.Project.StagedRollout
 	}
+	stagedRolloutEnabled := rt.Project != nil &&
+		(rt.Project.StagedRolloutEnabled ||
+			(rt.Project.StagedRollout >= pishkhan.MinRolloutPercentage && rt.Project.StagedRollout < pishkhan.MaxRolloutPercentage))
 	autoPub := f.AutoPublish
+	autoPubExplicit := f.AutoPublishSet
 	if !f.AutoPublishSet {
 		if rt.Env.AutoPublish != nil {
 			autoPub = *rt.Env.AutoPublish
+			autoPubExplicit = true
 		} else if rt.Project != nil && rt.Project.AutoPublish != nil {
 			autoPub = *rt.Project.AutoPublish
+			autoPubExplicit = true
 		}
 	}
 
@@ -251,36 +261,39 @@ func runPublishCmd(ctx context.Context, rt *AppRuntime, f publishCmdFlags) error
 	}
 
 	res, err := publish.Run(ctx, publish.Options{
-		Project:         rt.Android,
-		Module:          mod,
-		Variant:         chosenVariant,
-		PackageName:     resolved.PackageName,
-		PishkhanClient:  client,
-		Printer:         rt.Printer,
-		DryRun:          f.DryRun,
-		BumpKind:        android.BumpKind(strings.ToLower(strings.TrimSpace(f.Bump))),
-		VersionCode:     f.VersionCode,
-		VersionName:     f.VersionName,
-		BuildArtifact:   f.Build,
-		ArtifactKind:    f.FormatKind,
-		APKPath:         f.APKPath,
-		AABPath:         f.AABPath,
-		BinPath:         f.BinPath,
-		BundleSignerCmd: signerCmd,
-		Architecture:    pishkhan.Architecture(arch),
-		PollInterval:    f.PollInterval,
-		ChangelogFA:     fa,
-		ChangelogEN:     en,
-		DeveloperNote:   note,
-		Rollout:         rollout,
-		AutoPublish:     autoPub,
-		NoCommit:        f.NoCommit,
-		ReplaceDraft:    f.ReplaceDraft,
-		GitCommit:       f.GitCommit,
-		GitTag:          f.GitTag,
-		GitPush:         f.GitPush,
-		TagPrefix:       tagPrefix,
-		CommitTemplate:  commitTpl,
+		Project:              rt.Android,
+		Module:               mod,
+		Variant:              chosenVariant,
+		PackageName:          resolved.PackageName,
+		PishkhanClient:       client,
+		Printer:              rt.Printer,
+		DryRun:               f.DryRun,
+		BumpKind:             android.BumpKind(strings.ToLower(strings.TrimSpace(f.Bump))),
+		VersionCode:          f.VersionCode,
+		VersionName:          f.VersionName,
+		BuildArtifact:        f.Build,
+		ArtifactKind:         f.FormatKind,
+		APKPath:              f.APKPath,
+		AABPath:              f.AABPath,
+		BinPath:              f.BinPath,
+		BundleSignerCmd:      signerCmd,
+		Architecture:         pishkhan.Architecture(arch),
+		PollInterval:         f.PollInterval,
+		ChangelogFA:          fa,
+		ChangelogEN:          en,
+		DeveloperNote:        note,
+		Rollout:              rollout,
+		RolloutExplicit:      rolloutExplicit,
+		StagedRolloutEnabled: stagedRolloutEnabled,
+		AutoPublish:          autoPub,
+		AutoPublishExplicit:  autoPubExplicit,
+		NoCommit:             f.NoCommit,
+		ReplaceDraft:         f.ReplaceDraft,
+		GitCommit:            f.GitCommit,
+		GitTag:               f.GitTag,
+		GitPush:              f.GitPush,
+		TagPrefix:            tagPrefix,
+		CommitTemplate:       commitTpl,
 	})
 	if err != nil {
 		return err
@@ -299,6 +312,12 @@ func runPublishCmd(ctx context.Context, rt *AppRuntime, f publishCmdFlags) error
 		{Key: labelVariant, Value: fallbackDash(ctx, res.Variant)},
 		{Key: labelArtifact, Value: fallbackDash(ctx, res.ArtifactPath)},
 		{Key: "Committed", Value: fmt.Sprintf("%v", res.Committed)},
+	}
+	if res.Rollout > 0 {
+		items = append(items, output.KeyValue{Key: "Rollout", Value: fmt.Sprintf("%d%%", res.Rollout)})
+	}
+	if res.Committed || res.DryRun {
+		items = append(items, output.KeyValue{Key: "Auto Publish", Value: fmt.Sprintf("%v", res.AutoPublish)})
 	}
 	if res.GitTagName != "" {
 		items = append(items, output.KeyValue{Key: "Git Tag", Value: res.GitTagName})

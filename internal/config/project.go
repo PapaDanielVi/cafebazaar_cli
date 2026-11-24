@@ -24,16 +24,17 @@ const (
 
 // ProjectConfig defines non-secret per-repository settings stored in .bazaar.yaml.
 type ProjectConfig struct {
-	App             string            `yaml:"app,omitempty"`
-	Module          string            `yaml:"module,omitempty"`
-	DefaultVariant  string            `yaml:"default_variant,omitempty"`
-	Apps            map[string]string `yaml:"apps,omitempty"`
-	Proxy           string            `yaml:"proxy,omitempty"`
-	TagPrefix       string            `yaml:"tag_prefix,omitempty"`
-	CommitTemplate  string            `yaml:"commit_template,omitempty"`
-	AutoPublish     *bool             `yaml:"auto_publish,omitempty"`
-	StagedRollout   int               `yaml:"staged_rollout,omitempty"`
-	BundleSignerCmd string            `yaml:"bundle_signer_cmd,omitempty"`
+	App                  string            `yaml:"app,omitempty"`
+	Module               string            `yaml:"module,omitempty"`
+	DefaultVariant       string            `yaml:"default_variant,omitempty"`
+	Apps                 map[string]string `yaml:"apps,omitempty"`
+	Proxy                string            `yaml:"proxy,omitempty"`
+	TagPrefix            string            `yaml:"tag_prefix,omitempty"`
+	CommitTemplate       string            `yaml:"commit_template,omitempty"`
+	AutoPublish          *bool             `yaml:"auto_publish,omitempty"`
+	StagedRollout        int               `yaml:"staged_rollout,omitempty"`
+	StagedRolloutEnabled bool              `yaml:"staged_rollout_enabled,omitempty"`
+	BundleSignerCmd      string            `yaml:"bundle_signer_cmd,omitempty"`
 }
 
 // FindProjectConfig walks upward from startDir looking for .bazaar.yaml.

@@ -1,6 +1,7 @@
 package output
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -24,11 +25,12 @@ type KeyValue struct {
 
 // Printer handles all terminal, Persian, JSON, YAML, and headless plain output.
 type Printer struct {
-	Out   io.Writer
-	Err   io.Writer
-	In    io.Reader
-	Mode  RuntimeMode
-	Theme Theme
+	Out        io.Writer
+	Err        io.Writer
+	In         io.Reader
+	Mode       RuntimeMode
+	Theme      Theme
+	lineReader *bufio.Reader
 }
 
 // NewPrinter constructs a Printer configured for mode.
