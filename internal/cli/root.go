@@ -143,7 +143,7 @@ func NewRootCmd(ctx context.Context, deps Dependencies) *cobra.Command {
 	pf.StringVarP(&rt.Flags.Output, flagOutput, "o", "", "Output format: table, plain, json, yaml")
 	pf.StringVar(&rt.Flags.RTL, flagRTL, "", "Persian (Farsi) terminal shaping mode: auto, on, off")
 	pf.BoolVar(&rt.Flags.NoColor, flagNoColor, false, "Disable colored output")
-	pf.BoolVar(&rt.Flags.Verbose, flagVerbose, false, "Enable verbose diagnostics")
+	pf.BoolVarP(&rt.Flags.Verbose, flagVerbose, "v", false, "Enable verbose diagnostics to stderr (logs config, commands, and HTTP traffic with all tokens redacted)")
 	pf.StringVar(&rt.Flags.ConfigPath, flagConfigPath, "", "Path to global bazaar config.yaml")
 	pf.StringVar(&rt.Flags.Proxy, flagProxy, "", "Proxy URL for CafeBazaar API calls (http://, https://, socks5://, socks5h://, or direct)")
 
@@ -259,7 +259,120 @@ func (r *AppRuntime) bootstrap(ctx context.Context) error {
 		})
 	}
 
+	r.logBootstrapDiagnostics(ctx)
+
 	return nil
+}
+
+func (r *AppRuntime) isVerbose(ctx context.Context) bool {
+	_ = ctx
+	return r != nil && r.Printer != nil && r.Printer.Mode.Verbose
+}
+
+func (r *AppRuntime) debugf(ctx context.Context, format string, args ...any) {
+	if !r.isVerbose(ctx) {
+		return
+	}
+	msg := fmt.Sprintf(format, args...)
+	msg = httpclient.ScrubSecrets(ctx, msg, r.envSecretValues(ctx))
+	if err := r.Printer.PrintDebug(ctx, msg); err != nil {
+		return
+	}
+}
+
+func (r *AppRuntime) envSecretValues(ctx context.Context) []string {
+	_ = ctx
+	if r == nil {
+		return nil
+	}
+	secrets := make([]string, 0, 2)
+	if strings.TrimSpace(r.Env.AppToken) != "" {
+		secrets = append(secrets, r.Env.AppToken)
+	}
+	if strings.TrimSpace(r.Env.PublisherToken) != "" {
+		secrets = append(secrets, r.Env.PublisherToken)
+	}
+	return secrets
+}
+
+func (r *AppRuntime) httpDebugLogger(ctx context.Context) httpclient.DebugLogFunc {
+	if !r.isVerbose(ctx) {
+		return nil
+	}
+	return func(logCtx context.Context, msg string) {
+		r.debugf(logCtx, "%s", msg)
+	}
+}
+
+func (r *AppRuntime) logBootstrapDiagnostics(ctx context.Context) {
+	if !r.isVerbose(ctx) {
+		return
+	}
+	r.debugf(ctx, "CLI version=%s commit=%s cwd=%s", Version, Commit, r.Cwd)
+	r.debugf(ctx, "Mode interactive=%v format=%s color=%v rtl=%v yes=%v width=%d",
+		r.Printer.Mode.Interactive,
+		r.Printer.Mode.Format,
+		r.Printer.Mode.Color,
+		r.Printer.Mode.RTL,
+		r.Printer.Mode.Yes,
+		r.Printer.Mode.Width,
+	)
+	r.debugf(ctx, "Global config path=%s registered_apps=%d default_app=%q",
+		r.ConfigPath,
+		len(r.Global.Apps),
+		r.Global.DefaultApp,
+	)
+	if r.Project != nil {
+		autoPub := "unset"
+		if r.Project.AutoPublish != nil {
+			autoPub = fmt.Sprintf("%v", *r.Project.AutoPublish)
+		}
+		r.debugf(ctx, "Project config path=%s app=%q module=%q default_variant=%q auto_publish=%s staged_rollout=%d staged_rollout_enabled=%v tag_prefix=%q proxy=%q",
+			r.ProjectCfgPath,
+			r.Project.App,
+			r.Project.Module,
+			r.Project.DefaultVariant,
+			autoPub,
+			r.Project.StagedRollout,
+			r.Project.StagedRolloutEnabled,
+			r.Project.TagPrefix,
+			httpclient.MaskProxyURL(ctx, r.Project.Proxy),
+		)
+	} else {
+		r.debugf(ctx, "Project config path=none")
+	}
+	if r.Android != nil {
+		r.debugf(ctx, "Android project root=%s modules=%d packages=%v",
+			r.Android.RootDir,
+			len(r.Android.Modules),
+			r.Android.UniquePackageNames(ctx),
+		)
+	} else {
+		r.debugf(ctx, "Android project detected=false")
+	}
+	r.debugf(ctx, "Env ci=%v no_keyring=%v app=%q variant=%q rollout=%d proxy=%q app_token=%s publisher_token=%s",
+		r.Env.CI,
+		r.Env.NoKeyring,
+		r.Env.App,
+		r.Env.Variant,
+		r.Env.Rollout,
+		httpclient.MaskProxyURL(ctx, r.Env.Proxy),
+		tokenPresenceLabel(ctx, r.Env.AppToken),
+		tokenPresenceLabel(ctx, r.Env.PublisherToken),
+	)
+	if proxyURL := r.resolveProxyURL(ctx); proxyURL != "" {
+		r.debugf(ctx, "Effective proxy=%s", httpclient.MaskProxyURL(ctx, proxyURL))
+	} else {
+		r.debugf(ctx, "Effective proxy=system-env")
+	}
+}
+
+func tokenPresenceLabel(ctx context.Context, raw string) string {
+	_ = ctx
+	if strings.TrimSpace(raw) != "" {
+		return httpclient.RedactedValue
+	}
+	return "unset"
 }
 
 func (r *AppRuntime) resolveActiveApp(ctx context.Context, variant string) (config.ResolvedApp, error) {
@@ -278,8 +391,15 @@ func (r *AppRuntime) resolveActiveApp(ctx context.Context, variant string) (conf
 		Store:            r.Store,
 	})
 	if err != nil {
+		r.debugf(ctx, "App resolution failed (variant=%q): %v", variant, err)
 		return resolved, &output.ExitError{Code: output.ExitAuth, Err: err}
 	}
+	r.debugf(ctx, "Resolved app package=%q resolved_by=%s backend=%s token=%s",
+		resolved.PackageName,
+		resolved.ResolvedBy,
+		resolved.TokenSource,
+		httpclient.RedactedValue,
+	)
 	return resolved, nil
 }
 
@@ -302,33 +422,35 @@ func (r *AppRuntime) resolveProxyURL(ctx context.Context) string {
 
 func (r *AppRuntime) newPishkhanClient(ctx context.Context, token string) (*pishkhan.Client, error) {
 	proxyURL := r.resolveProxyURL(ctx)
-	if r.Flags.Verbose && proxyURL != "" && r.Printer != nil {
-		if err := r.Printer.PrintInfo(ctx, fmt.Sprintf("Using proxy: %s", httpclient.MaskProxyURL(ctx, proxyURL))); err != nil {
-			return nil, err
-		}
-	}
+	r.debugf(ctx, "Initializing Pishkhan API client (base_url=%q proxy=%q token=%s)",
+		r.Deps.PishkhanBaseURL,
+		httpclient.MaskProxyURL(ctx, proxyURL),
+		httpclient.RedactedValue,
+	)
 	return pishkhan.New(ctx, pishkhan.Config{
 		BaseURL:       r.Deps.PishkhanBaseURL,
 		Token:         token,
 		ClientAppName: httpclient.DefaultClientAppName,
 		CLIVersion:    Version,
 		ProxyURL:      proxyURL,
+		DebugLog:      r.httpDebugLogger(ctx),
 	})
 }
 
 func (r *AppRuntime) newCommentsClient(ctx context.Context, token string) (*comments.Client, error) {
 	proxyURL := r.resolveProxyURL(ctx)
-	if r.Flags.Verbose && proxyURL != "" && r.Printer != nil {
-		if err := r.Printer.PrintInfo(ctx, fmt.Sprintf("Using proxy: %s", httpclient.MaskProxyURL(ctx, proxyURL))); err != nil {
-			return nil, err
-		}
-	}
+	r.debugf(ctx, "Initializing Comments API client (base_url=%q proxy=%q token=%s)",
+		r.Deps.CommentsBaseURL,
+		httpclient.MaskProxyURL(ctx, proxyURL),
+		httpclient.RedactedValue,
+	)
 	return comments.New(ctx, comments.Config{
 		BaseURL:       r.Deps.CommentsBaseURL,
 		Token:         token,
 		ClientAppName: httpclient.DefaultClientAppName,
 		CLIVersion:    Version,
 		ProxyURL:      proxyURL,
+		DebugLog:      r.httpDebugLogger(ctx),
 	})
 }
 
@@ -345,11 +467,12 @@ func (r *AppRuntime) newPublisherClient(ctx context.Context, token, headerOverri
 		header = r.Global.Publisher.AuthHeader
 	}
 	proxyURL := r.resolveProxyURL(ctx)
-	if r.Flags.Verbose && proxyURL != "" && r.Printer != nil {
-		if err := r.Printer.PrintInfo(ctx, fmt.Sprintf("Using proxy: %s", httpclient.MaskProxyURL(ctx, proxyURL))); err != nil {
-			return nil, err
-		}
-	}
+	r.debugf(ctx, "Initializing Nasher Publisher API client (base_url=%q auth_header=%q proxy=%q token=%s)",
+		baseURL,
+		header,
+		httpclient.MaskProxyURL(ctx, proxyURL),
+		httpclient.RedactedValue,
+	)
 	return publisher.New(ctx, publisher.Config{
 		BaseURL:        baseURL,
 		Token:          token,
@@ -357,11 +480,13 @@ func (r *AppRuntime) newPublisherClient(ctx context.Context, token, headerOverri
 		ClientAppName:  httpclient.DefaultClientAppName,
 		CLIVersion:     Version,
 		ProxyURL:       proxyURL,
+		DebugLog:       r.httpDebugLogger(ctx),
 	})
 }
 
 func (r *AppRuntime) resolvePublisherToken(ctx context.Context) (string, string, error) {
 	if r.Env.PublisherToken != "" {
+		r.debugf(ctx, "Resolved Nasher publisher token backend=%s token=%s", auth.BackendEnv, httpclient.RedactedValue)
 		return r.Env.PublisherToken, auth.BackendEnv, nil
 	}
 	account := auth.DefaultAccount
@@ -370,6 +495,7 @@ func (r *AppRuntime) resolvePublisherToken(ctx context.Context) (string, string,
 	}
 	tok, backend, err := r.Store.Get(ctx, auth.PublisherKey(ctx, account))
 	if err != nil {
+		r.debugf(ctx, "Nasher publisher token lookup failed (account=%q): %v", account, err)
 		if errors.Is(err, auth.ErrSecretNotFound) {
 			return "", "", &output.ExitError{
 				Code: output.ExitAuth,
@@ -378,6 +504,7 @@ func (r *AppRuntime) resolvePublisherToken(ctx context.Context) (string, string,
 		}
 		return "", "", err
 	}
+	r.debugf(ctx, "Resolved Nasher publisher token account=%q backend=%s token=%s", account, backend, httpclient.RedactedValue)
 	return tok, backend, nil
 }
 

@@ -717,3 +717,89 @@ func TestStatusShowsCurrentRolloutPercentage(t *testing.T) {
 		t.Fatalf("expected json status output to include staged_rollout summary, got:\n%s", jsonOut)
 	}
 }
+
+func TestVerboseLogsEverythingToStderrWithoutLeakingTokens(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	const (
+		secretAppToken       = "pishkhan-live-secret-token-abc123"
+		secretPublisherToken = "nasher-live-secret-token-xyz789"
+	)
+
+	pishkhanSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case pishkhan.EndpointLastPublished:
+			w.WriteHeader(http.StatusOK)
+			writeTestResponse(ctx, t, w, `{"type":"success","release":{"packages":[{"version_code":10,"version_name":"1.0.0"}],"staged_rollout_percentage":100}}`)
+		default:
+			w.WriteHeader(http.StatusOK)
+			writeTestResponse(ctx, t, w, `{"type":"not-exists"}`)
+		}
+	}))
+	defer pishkhanSrv.Close()
+
+	cfgPath := filepath.Join(t.TempDir(), "config.yaml")
+	var outBuf, errBuf bytes.Buffer
+	cmd := cli.NewRootCmd(ctx, cli.Dependencies{
+		In:              strings.NewReader(""),
+		Out:             &outBuf,
+		Err:             &errBuf,
+		WorkDir:         t.TempDir(),
+		PishkhanBaseURL: pishkhanSrv.URL,
+		LookupEnv: func(key string) (string, bool) {
+			switch key {
+			case config.EnvConfig:
+				return cfgPath, true
+			case config.EnvAppToken:
+				return secretAppToken, true
+			case config.EnvPublisherToken:
+				return secretPublisherToken, true
+			case config.EnvCI:
+				return "1", true
+			default:
+				return "", false
+			}
+		},
+	})
+	cmd.SetArgs([]string{"status", "--verbose", "--output", "json"})
+	if err := cmd.ExecuteContext(ctx); err != nil {
+		t.Fatalf("status --verbose failed: %v", err)
+	}
+
+	stdoutStr := outBuf.String()
+	stderrStr := errBuf.String()
+
+	// Stdout must remain clean structured JSON with zero debug lines.
+	var parsed map[string]any
+	if err := json.Unmarshal([]byte(stdoutStr), &parsed); err != nil {
+		t.Fatalf("stdout must be valid JSON in --verbose -o json mode: %v\n%s", err, stdoutStr)
+	}
+	if strings.Contains(stdoutStr, "[DEBUG]") {
+		t.Fatalf("debug logs must not be written to stdout:\n%s", stdoutStr)
+	}
+
+	// Stderr must include config, app resolution, and HTTP request/response diagnostics.
+	for _, want := range []string{
+		"[DEBUG]",
+		"Global config path=",
+		"Resolved app package=",
+		"HTTP -> GET",
+		"HTTP <- 200 OK",
+		"Cafebazaar-Pishkhan-Api-Secret=[REDACTED]",
+		"app_token=[REDACTED]",
+		"publisher_token=[REDACTED]",
+	} {
+		if !strings.Contains(stderrStr, want) {
+			t.Fatalf("expected %q in verbose stderr output, got:\n%s", want, stderrStr)
+		}
+	}
+
+	// Neither Pishkhan nor Nasher tokens may appear anywhere in stdout or stderr.
+	combined := stdoutStr + "\n" + stderrStr
+	for _, secret := range []string{secretAppToken, secretPublisherToken} {
+		if strings.Contains(combined, secret) {
+			t.Fatalf("token %q leaked into CLI output:\n%s", secret, combined)
+		}
+	}
+}

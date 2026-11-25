@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"sync"
 
 	"gopkg.in/yaml.v3"
 )
@@ -31,6 +32,7 @@ type Printer struct {
 	Mode       RuntimeMode
 	Theme      Theme
 	lineReader *bufio.Reader
+	errMu      sync.Mutex
 }
 
 // NewPrinter constructs a Printer configured for mode.
@@ -225,8 +227,29 @@ func (p *Printer) PrintError(ctx context.Context, msg string) error {
 	if p.Theme.Enabled {
 		prefix = p.Theme.Danger.Render("✗")
 	}
-	if _, err := fmt.Fprintf(p.Err, "%s %s\n", prefix, p.Text(ctx, msg)); err != nil {
+	p.errMu.Lock()
+	_, err := fmt.Fprintf(p.Err, "%s %s\n", prefix, p.Text(ctx, msg))
+	p.errMu.Unlock()
+	if err != nil {
 		return fmt.Errorf("write error message: %w", err)
+	}
+	return nil
+}
+
+// PrintDebug prints a verbose diagnostic line to stderr when verbose mode is active.
+func (p *Printer) PrintDebug(ctx context.Context, msg string) error {
+	if p == nil || !p.Mode.Verbose {
+		return nil
+	}
+	prefix := "[DEBUG]"
+	if p.Theme.Enabled {
+		prefix = p.Theme.Muted.Render(prefix)
+	}
+	p.errMu.Lock()
+	_, err := fmt.Fprintf(p.Err, "%s %s\n", prefix, p.Text(ctx, msg))
+	p.errMu.Unlock()
+	if err != nil {
+		return fmt.Errorf("write debug message: %w", err)
 	}
 	return nil
 }

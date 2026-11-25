@@ -124,25 +124,25 @@ func (p *Printer) UploadProgress(ctx context.Context, label string) (httpclient.
 			pct = 100
 		}
 
-		if !p.Mode.Interactive {
+		if !p.Mode.Interactive || p.Mode.Verbose {
 			milestone := (pct / ciMilestoneStepPct) * ciMilestoneStepPct
 			if milestone > lastMilestone && milestone > 0 {
 				lastMilestone = milestone
-				writeMu.Lock()
+				p.errMu.Lock()
 				_, err := fmt.Fprintf(p.Err, "%s: %d%% (%s / %s)\n", label, milestone, HumanBytes(cbCtx, sent), HumanBytes(cbCtx, total))
-				writeMu.Unlock()
+				p.errMu.Unlock()
 				if err != nil {
 					return
 				}
 			}
 			if sent >= total && !completedNotified {
 				completedNotified = true
-				writeMu.Lock()
+				p.errMu.Lock()
 				if _, err := fmt.Fprintf(p.Err, "%s: upload complete, waiting for CafeBazaar server response...\n", label); err != nil {
-					writeMu.Unlock()
+					p.errMu.Unlock()
 					return
 				}
-				writeMu.Unlock()
+				p.errMu.Unlock()
 			}
 			return
 		}
@@ -228,11 +228,18 @@ func buildTransferStats(ctx context.Context, sent, total int64, elapsed time.Dur
 	return fmt.Sprintf(" (%s, ETA %s)", speedStr, FormatDuration(ctx, remaining))
 }
 
-// WithSpinner executes action with an animated emerald spinner and elapsed timer in interactive mode or a clean log line in CI mode.
+// WithSpinner executes action with an animated emerald spinner and elapsed timer in interactive mode or a clean log line in CI or verbose mode.
 func (p *Printer) WithSpinner(ctx context.Context, title string, action func(context.Context) error) error {
-	if !p.Mode.Interactive {
-		if p.Mode.Format == FormatPlain || p.Mode.Format == FormatTable {
-			if _, err := fmt.Fprintf(p.Err, "%s...\n", title); err != nil {
+	if !p.Mode.Interactive || p.Mode.Verbose {
+		if p.Mode.Verbose {
+			if err := p.PrintDebug(ctx, title+"..."); err != nil {
+				return err
+			}
+		} else if p.Mode.Format == FormatPlain || p.Mode.Format == FormatTable {
+			p.errMu.Lock()
+			_, err := fmt.Fprintf(p.Err, "%s...\n", title)
+			p.errMu.Unlock()
+			if err != nil {
 				return fmt.Errorf("write progress status: %w", err)
 			}
 		}

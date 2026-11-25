@@ -170,7 +170,7 @@ func ResolveMode(ctx context.Context, in ModeInput) RuntimeMode {
 		Format:      format,
 		RTL:         rtl,
 		Yes:         in.FlagYes || in.Env.Yes,
-		Verbose:     in.FlagVerbose,
+		Verbose:     in.FlagVerbose || in.Env.Verbose,
 		Width:       detectTerminalWidth(ctx, in.Stdout),
 	}
 }

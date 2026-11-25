@@ -135,6 +135,10 @@ func Run(ctx context.Context, opts Options) (Result, error) {
 		res.Steps = append(res.Steps, autoPublishNote)
 	}
 	res.AutoPublish = autoPublish
+	if err := opts.Printer.PrintDebug(ctx, fmt.Sprintf("Publish plan package=%q variant=%q dry_run=%v rollout=%d auto_publish=%v no_commit=%v",
+		opts.PackageName, opts.Variant.Name, opts.DryRun, rollout, autoPublish, opts.NoCommit)); err != nil {
+		return res, err
+	}
 
 	// Step 2: Optional Gradle version bump.
 	activeVersionCode := opts.Module.VersionCode
@@ -169,6 +173,9 @@ func Run(ctx context.Context, opts Options) (Result, error) {
 		if opts.DryRun {
 			res.Steps = append(res.Steps, fmt.Sprintf("Build Gradle task %s (dry-run)", task))
 		} else {
+			if err := opts.Printer.PrintDebug(ctx, fmt.Sprintf("Executing Gradle task %q in %s", task, opts.Project.RootDir)); err != nil {
+				return res, err
+			}
 			if err := opts.Printer.PrintInfo(ctx, fmt.Sprintf("Running Gradle task %s", task)); err != nil {
 				return res, err
 			}
@@ -183,6 +190,9 @@ func Run(ctx context.Context, opts Options) (Result, error) {
 	// Step 4: Resolve artifact path (explicit or auto-detected from build outputs).
 	apkPath, aabPath, binPath, err := resolveArtifacts(ctx, opts)
 	if err != nil {
+		return res, err
+	}
+	if err := opts.Printer.PrintDebug(ctx, fmt.Sprintf("Resolved artifacts apk=%q aab=%q bin=%q", apkPath, aabPath, binPath)); err != nil {
 		return res, err
 	}
 	if aabPath != "" {
@@ -455,6 +465,9 @@ func runGitSteps(ctx context.Context, opts Options, res *Result, verName string,
 
 func runBundleSignerHook(ctx context.Context, opts Options, aabPath string) error {
 	expanded := strings.ReplaceAll(opts.BundleSignerCmd, "{aab}", aabPath)
+	if err := opts.Printer.PrintDebug(ctx, fmt.Sprintf("Running bundle_signer_cmd: %s", expanded)); err != nil {
+		return err
+	}
 	shell := shellUnix
 	flag := shellUnixC
 	if runtime.GOOS == osWindows {

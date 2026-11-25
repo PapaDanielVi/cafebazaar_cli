@@ -50,6 +50,8 @@ const (
 	EnvCafeBazaarProxy = "CAFEBAZAAR_PROXY"
 	// EnvNoColor disables ANSI color output.
 	EnvNoColor = "NO_COLOR"
+	// EnvVerbose enables verbose diagnostics to stderr (with all tokens redacted).
+	EnvVerbose = "BAZAAR_VERBOSE"
 	// EnvXDGConfigHome overrides the base XDG configuration directory.
 	EnvXDGConfigHome = "XDG_CONFIG_HOME"
 )
@@ -76,6 +78,7 @@ type EnvSettings struct {
 	ConfigPath     string
 	Proxy          string
 	NoColor        bool
+	Verbose        bool
 }
 
 // ReadEnv reads all supported environment variables using lookup.
@@ -112,6 +115,7 @@ func ReadEnv(ctx context.Context, lookup func(string) (string, bool)) EnvSetting
 		ConfigPath:     get(EnvConfig),
 		Proxy:          firstNonEmpty(ctx, get(EnvProxy), get(EnvCafeBazaarProxy)),
 		NoColor:        isSetNonEmpty(ctx, lookup, EnvNoColor),
+		Verbose:        getBool(EnvVerbose),
 	}
 
 	if rawAuto, ok := lookup(EnvAutoPublish); ok && strings.TrimSpace(rawAuto) != "" {

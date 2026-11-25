@@ -47,6 +47,7 @@ type Config struct {
 	MaxRetries     int
 	RetryWait      time.Duration
 	HTTPClient     *http.Client
+	DebugLog       DebugLogFunc
 }
 
 // Client handles authenticated JSON and multipart HTTP requests to CafeBazaar APIs.
@@ -62,6 +63,7 @@ type Client struct {
 	maxRetries     int
 	retryWait      time.Duration
 	httpClient     *http.Client
+	debugLog       DebugLogFunc
 }
 
 // New constructs a validated HTTP client for CafeBazaar API calls.
@@ -139,6 +141,7 @@ func New(ctx context.Context, cfg Config) (*Client, error) {
 		maxRetries:     maxRetries,
 		retryWait:      retryWait,
 		httpClient:     httpClient,
+		debugLog:       cfg.DebugLog,
 	}, nil
 }
 
@@ -172,7 +175,7 @@ func (c *Client) DoJSONWithTimeout(ctx context.Context, timeout time.Duration, m
 	reqCtx, cancel := context.WithTimeout(ctx, effectiveTimeout)
 	defer cancel()
 
-	return c.executeWithRetry(reqCtx, func(attemptCtx context.Context) (*http.Request, error) {
+	return c.executeWithRetry(reqCtx, effectiveTimeout, payload, func(attemptCtx context.Context) (*http.Request, error) {
 		var reader io.Reader
 		if payload != nil {
 			reader = bytes.NewReader(payload)
@@ -235,6 +238,7 @@ func (c *Client) DoMultipartFiles(
 	}
 
 	prepared := make([]MultipartFile, 0, len(files))
+	fileSummaries := make([]string, 0, len(files))
 	var totalBytes int64
 	for _, f := range files {
 		if strings.TrimSpace(f.FilePath) == "" {
@@ -256,6 +260,7 @@ func (c *Client) DoMultipartFiles(
 			FilePath:    f.FilePath,
 			ContentType: ct,
 		})
+		fileSummaries = append(fileSummaries, fmt.Sprintf("%s=%s (%d bytes, %s)", f.FieldName, f.FilePath, info.Size(), ct))
 		totalBytes += info.Size()
 	}
 
@@ -285,16 +290,28 @@ func (c *Client) DoMultipartFiles(
 	}
 	c.setDefaultHeaders(reqCtx, req, multipartContentType)
 
+	safeURL := SanitizeURL(reqCtx, reqURL, c.secretValues(reqCtx))
+	c.logDebug(reqCtx, "HTTP -> POST %s (multipart/form-data, files=%d, total_bytes=%d, timeout=%s)", safeURL, len(prepared), totalBytes, c.uploadTimeout)
+	c.logDebug(reqCtx, "HTTP -> headers: %s", c.formatHeadersForLog(reqCtx, req.Header))
+	if len(fields) > 0 {
+		c.logDebug(reqCtx, "HTTP -> form fields: %s", c.formatFieldsForLog(reqCtx, fields))
+	}
+	c.logDebug(reqCtx, "HTTP -> form files: %s", strings.Join(fileSummaries, ", "))
+
+	start := time.Now()
 	resp, doErr := c.httpClient.Do(req)
+	elapsed := time.Since(start)
 	pipeErr := <-errCh
 	if doErr != nil {
+		c.logDebug(reqCtx, "HTTP !! POST %s failed (%s): %v", safeURL, elapsed.Round(time.Millisecond), doErr)
 		if pipeErr != nil {
 			return 0, fmt.Errorf("upload multipart body: %w", errors.Join(doErr, pipeErr))
 		}
 		return 0, fmt.Errorf("send multipart request: %w", doErr)
 	}
 
-	status, decodeErr := decodeResponse(reqCtx, resp, out)
+	status, bodyBytes, decodeErr := decodeResponse(reqCtx, resp, out)
+	c.logHTTPResponse(reqCtx, resp, elapsed, bodyBytes)
 	if pipeErr != nil {
 		return status, fmt.Errorf("stream multipart body: %w", pipeErr)
 	}
@@ -312,6 +329,8 @@ func (c *Client) setDefaultHeaders(ctx context.Context, req *http.Request, conte
 
 func (c *Client) executeWithRetry(
 	ctx context.Context,
+	timeout time.Duration,
+	payload []byte,
 	buildReq func(context.Context) (*http.Request, error),
 	out any,
 ) (int, error) {
@@ -324,13 +343,24 @@ func (c *Client) executeWithRetry(
 			return 0, err
 		}
 
+		safeURL := SanitizeURL(ctx, req.URL.String(), c.secretValues(ctx))
+		c.logDebug(ctx, "HTTP -> %s %s (attempt %d/%d, timeout=%s)", req.Method, safeURL, attempt+1, c.maxRetries+1, timeout)
+		c.logDebug(ctx, "HTTP -> headers: %s", c.formatHeadersForLog(ctx, req.Header))
+		if len(payload) > 0 {
+			c.logDebug(ctx, "HTTP -> body: %s", SanitizeBody(ctx, payload, c.secretValues(ctx)))
+		}
+
+		start := time.Now()
 		resp, err := c.httpClient.Do(req)
+		elapsed := time.Since(start)
 		if err != nil {
+			c.logDebug(ctx, "HTTP !! %s %s failed (%s): %v", req.Method, safeURL, elapsed.Round(time.Millisecond), err)
 			return 0, fmt.Errorf("execute http request: %w", err)
 		}
 
 		if resp.StatusCode == http.StatusTooManyRequests && attempt < c.maxRetries {
 			wait := retryDelay(ctx, resp.Header.Get(HeaderRetryAfter), c.retryWait, attempt)
+			c.logDebug(ctx, "HTTP <- %d %s (%s, attempt %d/%d, retrying in %s)", resp.StatusCode, http.StatusText(resp.StatusCode), elapsed.Round(time.Millisecond), attempt+1, c.maxRetries+1, wait)
 			_, drainErr := io.Copy(io.Discard, io.LimitReader(resp.Body, maxErrorBodyBytes))
 			closeErr := resp.Body.Close()
 			if drainErr != nil {
@@ -346,13 +376,25 @@ func (c *Client) executeWithRetry(
 			continue
 		}
 
-		status, decodeErr := decodeResponse(ctx, resp, out)
+		status, bodyBytes, decodeErr := decodeResponse(ctx, resp, out)
+		c.logHTTPResponse(ctx, resp, elapsed, bodyBytes)
 		lastStatus = status
 		lastErr = decodeErr
 		return lastStatus, lastErr
 	}
 
 	return lastStatus, lastErr
+}
+
+func (c *Client) logHTTPResponse(ctx context.Context, resp *http.Response, elapsed time.Duration, bodyBytes []byte) {
+	if c == nil || c.debugLog == nil || resp == nil {
+		return
+	}
+	c.logDebug(ctx, "HTTP <- %d %s (%s, %d bytes)", resp.StatusCode, http.StatusText(resp.StatusCode), elapsed.Round(time.Millisecond), len(bodyBytes))
+	c.logDebug(ctx, "HTTP <- headers: %s", c.formatHeadersForLog(ctx, resp.Header))
+	if sanitized := SanitizeBody(ctx, bodyBytes, c.secretValues(ctx)); sanitized != "" {
+		c.logDebug(ctx, "HTTP <- body: %s", sanitized)
+	}
 }
 
 func (c *Client) buildURL(ctx context.Context, endpoint string, query url.Values) (string, error) {
@@ -447,28 +489,28 @@ func escapeMultipartQuotes(ctx context.Context, s string) string {
 	return replacer.Replace(s)
 }
 
-func decodeResponse(ctx context.Context, resp *http.Response, out any) (int, error) {
+func decodeResponse(ctx context.Context, resp *http.Response, out any) (int, []byte, error) {
 	_ = ctx
 	bodyBytes, readErr := io.ReadAll(resp.Body)
 	closeErr := resp.Body.Close()
 	if readErr != nil {
-		return resp.StatusCode, fmt.Errorf("read response body: %w", readErr)
+		return resp.StatusCode, bodyBytes, fmt.Errorf("read response body: %w", readErr)
 	}
 	if closeErr != nil {
-		return resp.StatusCode, fmt.Errorf("close response body: %w", closeErr)
+		return resp.StatusCode, bodyBytes, fmt.Errorf("close response body: %w", closeErr)
 	}
 
 	if resp.StatusCode < httpSuccessMin || resp.StatusCode > httpSuccessMax {
-		return resp.StatusCode, parseAPIError(ctx, resp.StatusCode, bodyBytes)
+		return resp.StatusCode, bodyBytes, parseAPIError(ctx, resp.StatusCode, bodyBytes)
 	}
 
 	if out != nil && len(bytes.TrimSpace(bodyBytes)) > 0 {
 		if err := json.Unmarshal(bodyBytes, out); err != nil {
-			return resp.StatusCode, fmt.Errorf("decode response json: %w", err)
+			return resp.StatusCode, bodyBytes, fmt.Errorf("decode response json: %w", err)
 		}
 	}
 
-	return resp.StatusCode, nil
+	return resp.StatusCode, bodyBytes, nil
 }
 
 func parseAPIError(ctx context.Context, statusCode int, body []byte) error {

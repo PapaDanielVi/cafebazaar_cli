@@ -29,6 +29,7 @@ type Config struct {
 	HTTPClient    *http.Client
 	MaxRetries    int
 	RetryWait     time.Duration
+	DebugLog      httpclient.DebugLogFunc
 }
 
 // New creates a new Comments API client.
@@ -47,6 +48,7 @@ func New(ctx context.Context, cfg Config) (*Client, error) {
 		HTTPClient:     cfg.HTTPClient,
 		MaxRetries:     cfg.MaxRetries,
 		RetryWait:      cfg.RetryWait,
+		DebugLog:       cfg.DebugLog,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("initialize comments client: %w", err)
