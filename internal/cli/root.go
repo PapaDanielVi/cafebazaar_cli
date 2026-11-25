@@ -539,8 +539,8 @@ func shortenDisplayPath(ctx context.Context, fullPath string) string {
 		return "~"
 	}
 	prefix := cleanHome + string(filepath.Separator)
-	if strings.HasPrefix(cleanPath, prefix) {
-		return "~" + string(filepath.Separator) + strings.TrimPrefix(cleanPath, prefix)
+	if rel, ok := strings.CutPrefix(cleanPath, prefix); ok {
+		return "~" + string(filepath.Separator) + rel
 	}
 	return cleanPath
 }

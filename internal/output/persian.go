@@ -147,10 +147,7 @@ func WrapRunes(ctx context.Context, text string, maxRunes int) []string {
 					continue
 				}
 				for start := 0; start < wLen; start += maxRunes {
-					end := start + maxRunes
-					if end > wLen {
-						end = wLen
-					}
+					end := min(start+maxRunes, wLen)
 					out = append(out, string(wRunes[start:end]))
 				}
 				continue
@@ -169,10 +166,7 @@ func WrapRunes(ctx context.Context, text string, maxRunes int) []string {
 			} else {
 				curLen = 0
 				for start := 0; start < wLen; start += maxRunes {
-					end := start + maxRunes
-					if end > wLen {
-						end = wLen
-					}
+					end := min(start+maxRunes, wLen)
 					out = append(out, string(wRunes[start:end]))
 				}
 			}

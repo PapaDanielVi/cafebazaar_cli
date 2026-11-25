@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -203,10 +204,8 @@ func (c *GlobalConfig) BindPath(ctx context.Context, pkg, dirPath string) error 
 		}
 	}
 
-	for _, existing := range entry.Paths {
-		if existing == absDir {
-			return nil
-		}
+	if slices.Contains(entry.Paths, absDir) {
+		return nil
 	}
 	entry.Paths = append(entry.Paths, absDir)
 	sort.Strings(entry.Paths)

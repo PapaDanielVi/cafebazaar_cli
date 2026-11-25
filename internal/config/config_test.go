@@ -231,10 +231,10 @@ func TestSaveProjectConfigWritesSchemaModelineAndMatchesSchema(t *testing.T) {
 		t.Fatalf("schema $id %q does not match ProjectSchemaURL %q", doc.ID, config.ProjectSchemaURL)
 	}
 
-	structType := reflect.TypeOf(config.ProjectConfig{})
+	structType := reflect.TypeFor[config.ProjectConfig]()
 	structKeys := make(map[string]struct{}, structType.NumField())
-	for i := 0; i < structType.NumField(); i++ {
-		tag := strings.Split(structType.Field(i).Tag.Get("yaml"), ",")[0]
+	for field := range structType.Fields() {
+		tag, _, _ := strings.Cut(field.Tag.Get("yaml"), ",")
 		if tag == "" || tag == "-" {
 			continue
 		}

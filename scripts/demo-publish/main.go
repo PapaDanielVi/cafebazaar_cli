@@ -263,8 +263,8 @@ func writeDemoFile(ctx context.Context, path string, data []byte, perm os.FileMo
 func writeDemoPNG(ctx context.Context, path string, width, height int, fill color.RGBA) error {
 	_ = ctx
 	img := image.NewRGBA(image.Rect(0, 0, width, height))
-	for y := 0; y < height; y++ {
-		for x := 0; x < width; x++ {
+	for y := range height {
+		for x := range width {
 			img.SetRGBA(x, y, fill)
 		}
 	}

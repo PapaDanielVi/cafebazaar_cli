@@ -455,7 +455,7 @@ func promptValidatedInput(
 	defaultValue string,
 	validate func(string) (string, error),
 ) (string, error) {
-	for attempt := 0; attempt < maxPromptRetries; attempt++ {
+	for range maxPromptRetries {
 		raw, err := printer.Input(ctx, title, description, placeholder, defaultValue, false)
 		if err != nil {
 			return "", err
@@ -472,7 +472,7 @@ func promptValidatedInput(
 }
 
 func promptRequiredMultiline(ctx context.Context, printer *output.Printer, title, description string) (string, error) {
-	for attempt := 0; attempt < maxPromptRetries; attempt++ {
+	for range maxPromptRetries {
 		val, err := printer.MultilineInput(ctx, title, description, "")
 		if err != nil {
 			return "", err
@@ -543,7 +543,7 @@ func expandScreenshotInputs(ctx context.Context, rawInputs []string) ([]string, 
 	}
 
 	for _, raw := range rawInputs {
-		for _, token := range strings.Split(raw, ",") {
+		for token := range strings.SplitSeq(raw, ",") {
 			trimmed := strings.TrimSpace(token)
 			if trimmed == "" {
 				continue

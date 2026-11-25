@@ -61,7 +61,9 @@ func (p *Printer) renderDangerSummary(ctx context.Context, req ConfirmRequest) e
 		b.WriteString(p.Theme.Danger.Render(p.Text(ctx, title)))
 		b.WriteByte('\n')
 	} else {
-		b.WriteString("[DANGER] " + p.Text(ctx, title) + "\n")
+		b.WriteString("[DANGER] ")
+		b.WriteString(p.Text(ctx, title))
+		b.WriteByte('\n')
 	}
 
 	if req.TargetApp != "" {
@@ -79,7 +81,8 @@ func (p *Printer) renderDangerSummary(ctx context.Context, req ConfirmRequest) e
 		if p.Theme.Enabled {
 			b.WriteString(p.Theme.Warning.Render(p.Text(ctx, req.Warning)))
 		} else {
-			b.WriteString("Warning: " + p.Text(ctx, req.Warning))
+			b.WriteString("Warning: ")
+			b.WriteString(p.Text(ctx, req.Warning))
 		}
 	}
 

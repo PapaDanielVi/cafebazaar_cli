@@ -95,10 +95,7 @@ func (m SelectModel) Init() tea.Cmd {
 
 func (m SelectModel) visibleRows(ctx context.Context) int {
 	_ = ctx
-	maxFit := m.height - selectChromeRows
-	if maxFit < 1 {
-		maxFit = 1
-	}
+	maxFit := max(m.height-selectChromeRows, 1)
 	avail := min(maxFit, selectMaxVisibleRows)
 	return min(len(m.filtered), avail)
 }
@@ -332,7 +329,8 @@ func (m SelectModel) View() string {
 			if i == m.cursor {
 				b.WriteString(selectedStyle.Render("> " + label))
 			} else {
-				b.WriteString("  " + label)
+				b.WriteString("  ")
+				b.WriteString(label)
 			}
 			b.WriteByte('\n')
 		}

@@ -108,10 +108,7 @@ func New(ctx context.Context, cfg Config) (*Client, error) {
 	if uploadTimeout <= 0 {
 		uploadTimeout = DefaultUploadTimeout
 	}
-	maxRetries := cfg.MaxRetries
-	if maxRetries < 0 {
-		maxRetries = 0
-	}
+	maxRetries := max(cfg.MaxRetries, 0)
 	if cfg.MaxRetries == 0 {
 		maxRetries = defaultMaxRetries
 	}

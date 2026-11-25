@@ -118,10 +118,7 @@ func (p *Printer) PrintCard(ctx context.Context, title string, items []KeyValue)
 	}
 	labelColWidth := maxKey + 3
 	// Reserve 6 columns for left/right rounded borders and horizontal padding (2 each side + 2 borders).
-	valueMaxRunes := cardWidth - labelColWidth - 6
-	if valueMaxRunes < 24 {
-		valueMaxRunes = 24
-	}
+	valueMaxRunes := max(cardWidth-labelColWidth-6, 24)
 	continuationIndent := strings.Repeat(" ", labelColWidth)
 
 	for idx, item := range items {

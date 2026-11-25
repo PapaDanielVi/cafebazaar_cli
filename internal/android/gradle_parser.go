@@ -435,7 +435,8 @@ func loadGradleProperties(ctx context.Context, rootDir string) map[string]string
 			out[strings.TrimSpace(k)] = strings.TrimSpace(v)
 		}
 	}
-	if closeErr := file.Close(); closeErr != nil {
+	scanErr := scanner.Err()
+	if closeErr := file.Close(); closeErr != nil || scanErr != nil {
 		return out
 	}
 	return out
@@ -469,7 +470,8 @@ func loadVersionCatalog(ctx context.Context, rootDir string) map[string]string {
 			out[strings.TrimSpace(k)] = val
 		}
 	}
-	if closeErr := file.Close(); closeErr != nil {
+	scanErr := scanner.Err()
+	if closeErr := file.Close(); closeErr != nil || scanErr != nil {
 		return out
 	}
 	return out

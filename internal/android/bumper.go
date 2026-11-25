@@ -111,10 +111,7 @@ func ComputeBump(ctx context.Context, mod AppModule, opts BumpOptions) (BumpPlan
 		return BumpPlan{}, err
 	}
 
-	baseCode := mod.VersionCode
-	if opts.MinVersionCode > baseCode {
-		baseCode = opts.MinVersionCode
-	}
+	baseCode := max(mod.VersionCode, opts.MinVersionCode)
 	newCode := baseCode + 1
 	if opts.VersionCode > 0 {
 		newCode = opts.VersionCode

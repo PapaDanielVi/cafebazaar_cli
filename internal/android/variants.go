@@ -14,7 +14,8 @@ func synthesizeVariants(ctx context.Context, mod AppModule) []Variant {
 	for _, combo := range flavorCombos {
 		for _, bt := range mod.BuildTypes {
 			pkg := mod.ApplicationID
-			verName := mod.VersionName
+			var verName strings.Builder
+			verName.WriteString(mod.VersionName)
 			flavorNames := make([]string, 0, len(combo))
 
 			for _, f := range combo {
@@ -26,7 +27,7 @@ func synthesizeVariants(ctx context.Context, mod AppModule) []Variant {
 					pkg += f.ApplicationIDSuffix
 				}
 				if f.VersionNameSuffix != "" {
-					verName += f.VersionNameSuffix
+					verName.WriteString(f.VersionNameSuffix)
 				}
 			}
 
@@ -34,7 +35,7 @@ func synthesizeVariants(ctx context.Context, mod AppModule) []Variant {
 				pkg += bt.ApplicationIDSuffix
 			}
 			if bt.VersionNameSuffix != "" {
-				verName += bt.VersionNameSuffix
+				verName.WriteString(bt.VersionNameSuffix)
 			}
 
 			variantName := combineVariantName(ctx, flavorNames, bt.Name)
@@ -51,7 +52,7 @@ func synthesizeVariants(ctx context.Context, mod AppModule) []Variant {
 				Flavors:      flavorNames,
 				PackageName:  pkg,
 				VersionCode:  mod.VersionCode,
-				VersionName:  verName,
+				VersionName:  verName.String(),
 				AssembleTask: fmt.Sprintf("%s:assemble%s", taskPrefix, taskSuffix),
 				BundleTask:   fmt.Sprintf("%s:bundle%s", taskPrefix, taskSuffix),
 			})

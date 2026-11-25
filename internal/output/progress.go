@@ -119,10 +119,7 @@ func (p *Printer) UploadProgress(ctx context.Context, label string) (httpclient.
 		if sent > total {
 			sent = total
 		}
-		pct := int((sent * 100) / total)
-		if pct > 100 {
-			pct = 100
-		}
+		pct := min(int((sent*100)/total), 100)
 
 		if !p.Mode.Interactive || p.Mode.Verbose {
 			milestone := (pct / ciMilestoneStepPct) * ciMilestoneStepPct
@@ -154,10 +151,7 @@ func (p *Printer) UploadProgress(ctx context.Context, label string) (httpclient.
 		lastRender = now
 		renderedInteractive = true
 
-		filled := (pct * progressBarWidth) / 100
-		if filled > progressBarWidth {
-			filled = progressBarWidth
-		}
+		filled := min((pct*progressBarWidth)/100, progressBarWidth)
 		bar := strings.Repeat("█", filled) + strings.Repeat("░", progressBarWidth-filled)
 		styledBar := bar
 		if p.Theme.Enabled {
@@ -254,9 +248,7 @@ func (p *Printer) WithSpinner(ctx context.Context, title string, action func(con
 
 	done := make(chan struct{})
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		ticker := time.NewTicker(spinnerInterval)
 		defer ticker.Stop()
 		idx := 0
@@ -288,7 +280,7 @@ func (p *Printer) WithSpinner(ctx context.Context, title string, action func(con
 			case <-ticker.C:
 			}
 		}
-	}()
+	})
 
 	err := action(ctx)
 	close(done)

@@ -3,6 +3,7 @@ package publisher
 import (
 	"context"
 	"fmt"
+	"maps"
 	"net/http"
 	"path/filepath"
 	"strconv"
@@ -78,9 +79,7 @@ func (c *Client) CreateApp(ctx context.Context, req CreateAppRequest, onProgress
 	}
 
 	fields := make(map[string]string, len(req.ExtraFields)+12)
-	for k, v := range req.ExtraFields {
-		fields[k] = v
-	}
+	maps.Copy(fields, req.ExtraFields)
 	if strings.TrimSpace(req.PackageName) != "" {
 		fields[FieldPackageName] = strings.TrimSpace(req.PackageName)
 	}
