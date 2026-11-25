@@ -25,6 +25,10 @@
 
 ## Demos
 
+### Publish From Scratch (`bazaar init` & `bazaar publish`)
+
+![bazaar publish from scratch: new app init, category picker, Gradle bump and build, staged rollout, and release commit](assets/demos/publish-from-scratch.gif)
+
 ### Live Status, Auth Overview & Project Config
 
 ![bazaar status, auth overview, and project config](assets/demos/status-and-config.gif)

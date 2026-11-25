@@ -310,7 +310,7 @@ func runPublishCmd(ctx context.Context, rt *AppRuntime, f publishCmdFlags) error
 	items := []output.KeyValue{
 		{Key: labelPackageName, Value: res.PackageName},
 		{Key: labelVariant, Value: fallbackDash(ctx, res.Variant)},
-		{Key: labelArtifact, Value: fallbackDash(ctx, res.ArtifactPath)},
+		{Key: labelArtifact, Value: fallbackDash(ctx, relativeDisplayPath(ctx, rt.Cwd, res.ArtifactPath))},
 		{Key: "Committed", Value: fmt.Sprintf("%v", res.Committed)},
 	}
 	if res.Rollout > 0 {

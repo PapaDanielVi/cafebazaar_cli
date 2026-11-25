@@ -8,7 +8,7 @@ LDFLAGS := -X github.com/PapaDanielVi/cafebazaar_cli/internal/cli.Version=$(VERS
 	-X github.com/PapaDanielVi/cafebazaar_cli/internal/cli.Commit=$(COMMIT) \
 	-X github.com/PapaDanielVi/cafebazaar_cli/internal/cli.BuildDate=$(BUILD_DATE)
 
-.PHONY: build test vet lint security install clean release-dist demos
+.PHONY: build test vet lint security install clean release-dist demos demo-publish
 
 DEMO_DIR ?= .
 DEMO_MASK_PATH ?= ~/projects/cafebazaar-sample-app
@@ -55,7 +55,7 @@ demos:
 	@command -v vhs >/dev/null 2>&1 || { echo "vhs is required (https://github.com/charmbracelet/vhs)"; exit 1; }
 	@REPO_DIR="$$(pwd)"; \
 	TARGET_DIR="$$(cd "$(DEMO_DIR)" && pwd)"; \
-	TMP_DIR="$$(mktemp -d)"; \
+	TMP_DIR="$$(cd "$$(mktemp -d)" && pwd -P)"; \
 	trap 'rm -rf "$$TMP_DIR"' EXIT; \
 	mkdir -p "$$TMP_DIR/bin"; \
 	REAL_BAZAAR="$$(command -v bazaar || echo "$$REPO_DIR/$(BIN_DIR)/$(BINARY)")"; \
@@ -109,6 +109,23 @@ demos:
 		fi; \
 		(cd "$$TARGET_DIR" && BAZAAR_REAL_BIN="$$REAL_BAZAAR" BAZAAR_DEMO_TARGET="$$TARGET_DIR" BAZAAR_DEMO_MASK="$(DEMO_MASK_PATH)" vhs "$$TMP_DIR/$${tape}.tape"); \
 	done
+
+demo-publish:
+	@command -v vhs >/dev/null 2>&1 || { echo "vhs is required (https://github.com/charmbracelet/vhs)"; exit 1; }
+	@REPO_DIR="$$(pwd)"; \
+	TMP_DIR="$$(cd "$$(mktemp -d)" && pwd -P)"; \
+	SERVER_PID=""; \
+	trap '[ -n "$$SERVER_PID" ] && kill "$$SERVER_PID" 2>/dev/null || true; rm -rf "$$TMP_DIR"' EXIT; \
+	mkdir -p "$$TMP_DIR/bin"; \
+	go build -o "$$TMP_DIR/bin/bazaar" ./scripts/demo-publish; \
+	"$$TMP_DIR/bin/bazaar" --prepare "$$TMP_DIR/work"; \
+	"$$TMP_DIR/bin/bazaar" --serve "$$TMP_DIR/api.url" & \
+	SERVER_PID=$$!; \
+	for _ in 1 2 3 4 5 6 7 8 9 10; do [ -s "$$TMP_DIR/api.url" ] && break; sleep 0.2; done; \
+	API_URL="$$(cat "$$TMP_DIR/api.url")"; \
+	sed "s|Output \"assets/demos/|Output \"$$REPO_DIR/assets/demos/|g" "$$REPO_DIR/assets/demos/publish-from-scratch.tape" > "$$TMP_DIR/publish-from-scratch.tape"; \
+	python3 -c 'import pathlib,sys; p=pathlib.Path(sys.argv[1]); s=p.read_text(); inj=f"Type '\''export HOME=\"{sys.argv[2]}/work/home\" PATH=\"{sys.argv[2]}/bin:$$PATH\" BAZAAR_NO_KEYRING=1 BAZAAR_DEMO_API_URL=\"{sys.argv[3]}\"'\''\nEnter\n"; p.write_text(s.replace("Type \"clear\"\nEnter\nSleep 400ms\nShow", inj+"Type \"clear\"\nEnter\nSleep 400ms\nShow", 1))' "$$TMP_DIR/publish-from-scratch.tape" "$$TMP_DIR" "$$API_URL"; \
+	(cd "$$TMP_DIR/work/home/projects/simple-notes" && vhs "$$TMP_DIR/publish-from-scratch.tape")
 
 clean:
 	rm -rf $(BIN_DIR) dist

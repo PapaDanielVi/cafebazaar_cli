@@ -263,7 +263,7 @@ func runInit(ctx context.Context, rt *AppRuntime, opts initOptions) error {
 		{Key: labelPackageName, Value: pkg},
 		{Key: "Default Variant", Value: fallbackDash(ctx, selectedVariant.Name)},
 		{Key: "Secret Token", Value: fmt.Sprintf("%s (%s)", auth.MaskToken(ctx, token), backend)},
-		{Key: "Project File", Value: cfgFilePath},
+		{Key: "Project File", Value: shortenDisplayPath(ctx, cfgFilePath)},
 	}); err != nil {
 		return err
 	}
