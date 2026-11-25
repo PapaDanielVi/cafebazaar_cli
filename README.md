@@ -470,9 +470,10 @@ publish_cafebazaar:
 
 ## Project Configuration (`.bazaar.yaml`)
 
-Running `bazaar init` writes a non-secret `.bazaar.yaml` in your Android project root. Secrets are never written to this file, so it is safe to check into Git if you want shared defaults across your team:
+Running `bazaar init` writes a non-secret `.bazaar.yaml` in your Android project root with a `yaml-language-server` schema comment at the top for autocomplete and validation in VS Code, Android Studio, IntelliJ IDEA, and Neovim. Secrets are never written to this file, so it is safe to check into Git if you want shared defaults across your team:
 
 ```yaml
+# yaml-language-server: $schema=https://raw.githubusercontent.com/PapaDanielVi/cafebazaar_cli/master/schemas/bazaar.schema.json
 app: com.example.myapp
 module: :app
 default_variant: release
@@ -485,8 +486,11 @@ tag_prefix: v
 commit_template: "chore(release): bump version to v%s (%d)"
 auto_publish: false
 staged_rollout: 100
+staged_rollout_enabled: false
 bundle_signer_cmd: "java -jar tools/bundle-signer.jar {aab}"
 ```
+
+The JSON Schema lives at [`schemas/bazaar.schema.json`](schemas/bazaar.schema.json).
 
 ---
 

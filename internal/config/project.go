@@ -14,6 +14,10 @@ import (
 const (
 	// ProjectConfigFileName is the non-secret project config placed in an Android repo root.
 	ProjectConfigFileName = ".bazaar.yaml"
+	// ProjectSchemaURL is the canonical JSON Schema URL for .bazaar.yaml editor validation.
+	ProjectSchemaURL = "https://raw.githubusercontent.com/PapaDanielVi/cafebazaar_cli/master/schemas/bazaar.schema.json"
+	// ProjectSchemaModeline is the yaml-language-server comment header written to .bazaar.yaml.
+	ProjectSchemaModeline = "# yaml-language-server: $schema=" + ProjectSchemaURL
 	// DefaultTagPrefix is the default Git tag prefix for Android releases.
 	DefaultTagPrefix = "v"
 	// DefaultCommitTemplate formats automated Gradle version bump commit messages.
@@ -85,8 +89,9 @@ func SaveProjectConfig(ctx context.Context, dir string, cfg *ProjectConfig) (str
 	if err != nil {
 		return "", fmt.Errorf("encode project config yaml: %w", err)
 	}
+	content := append([]byte(ProjectSchemaModeline+"\n"), encoded...)
 	target := filepath.Join(dir, ProjectConfigFileName)
-	if err := os.WriteFile(target, encoded, projectFilePerm); err != nil {
+	if err := os.WriteFile(target, content, projectFilePerm); err != nil {
 		return "", fmt.Errorf("write project config %q: %w", target, err)
 	}
 	return target, nil
